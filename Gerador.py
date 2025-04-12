@@ -1041,7 +1041,8 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 
 def get_gdrive_service():
     creds = None
-    CLIENT_SECRET_FILE = 'client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json'  # Ajuste se precisar
+    CLIENT_SECRET_FILE = os.path.join("config", "client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json")
+  # Ajuste se precisar
     TOKEN_FILE = 'token.json'
 
     if os.path.exists(TOKEN_FILE):
