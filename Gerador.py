@@ -1159,11 +1159,11 @@ class MainApp(ttkb.Window):
         self.add_aba()
         baixar_arquivo_if_needed(
         "Proposta Comercial ConnectPlug.pptx",
-        "https://raw.githubusercontent.com/seu-usuario/seu-repo/main/assets/Proposta%20Comercial%20ConnectPlug.pptx")
+        "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Proposta%20Comercial%20Connectplug.pptx")
 
         baixar_arquivo_if_needed(
         "Material Tecnico ConnectPlug.pptx",
-        "https://raw.githubusercontent.com/seu-usuario/seu-repo/main/assets/Material%20Tecnico%20ConnectPlug.pptx" )
+        "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Material%20Tecnico%20ConnectPlug.pptx" )
 
     def on_close(self):
         salvar_config(
