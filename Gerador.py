@@ -1,10 +1,30 @@
+import sys
+import subprocess
+
+# Lista com nome_de_importação : nome_para_instalar
+dependencias = {
+    "ttkbootstrap": "ttkbootstrap",
+    "pptx": "python-pptx",
+    "googleapiclient": "google-api-python-client",
+    "google.auth.transport": "google-auth-httplib2",
+    "google_auth_oauthlib": "google-auth-oauthlib",
+    "requests": "requests"
+}
+
+
+for modulo, pacote in dependencias.items():
+    try:
+        __import__(modulo)
+    except ImportError:
+        print(f"Instalando '{pacote}' pois '{modulo}' não foi encontrado...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
+
+
 import os
 import requests
-import sys
 import io
 import pickle
 import json
-import subprocess
 from datetime import date
 
 # Tkinter e ttkbootstrap
@@ -24,23 +44,6 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 
 
-# Lista com nome_de_importação : nome_para_instalar
-dependencias = {
-    "ttkbootstrap": "ttkbootstrap",
-    "pptx": "python-pptx",
-    "googleapiclient": "google-api-python-client",
-    "google.auth.transport": "google-auth-httplib2",
-    "google_auth_oauthlib": "google-auth-oauthlib",
-    "requests": "requests"
-}
-
-
-for modulo, pacote in dependencias.items():
-    try:
-        __import__(modulo)
-    except ImportError:
-        print(f"Instalando '{pacote}' pois '{modulo}' não foi encontrado...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
 
 
 def baixar_arquivo_if_needed(nome_arquivo, url):
