@@ -1039,16 +1039,37 @@ def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
 # ---------------------------------------------------------
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
+def baixar_client_secret_remoto():
+    url = "https://github.com/DevRGS/Gerador/raw/refs/heads/main/config/client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json"
+    nome_local = "client_secret_temp.json"
+
+    if not os.path.exists(nome_local):
+        print("Baixando credencial do GitHub...")
+        r = requests.get(url)
+        if r.status_code == 200:
+            with open(nome_local, "w", encoding="utf-8") as f:
+                f.write(r.text)
+        else:
+            raise Exception(f"Erro ao baixar o client_secret: {r.status_code}")
+
+    return nome_local
+
 def get_gdrive_service():
+    import pickle
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+
     creds = None
-    CLIENT_SECRET_FILE = os.path.join("config", "client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json")
-  # Ajuste se precisar
+    CLIENT_SECRET_FILE = baixar_client_secret_remoto()
     TOKEN_FILE = 'token.json'
 
+    # Verifica se já existe um token salvo
     if os.path.exists(TOKEN_FILE):
         with open(TOKEN_FILE, 'rb') as token:
             creds = pickle.load(token)
 
+    # Se não houver credenciais válidas, inicia o fluxo de autenticação
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -1056,6 +1077,7 @@ def get_gdrive_service():
             flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
 
+        # Salva o token para a próxima vez
         with open(TOKEN_FILE, 'wb') as token:
             pickle.dump(creds, token)
 
