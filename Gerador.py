@@ -1,7 +1,8 @@
 import sys
 import subprocess
+import importlib
 
-# Lista com nome_de_importação : nome_para_instalar
+# Dicionário: "nome para importar" : "nome do pacote no PyPI"
 dependencias = {
     "ttkbootstrap": "ttkbootstrap",
     "pptx": "python-pptx",
@@ -11,13 +12,18 @@ dependencias = {
     "requests": "requests"
 }
 
-
 for modulo, pacote in dependencias.items():
     try:
-        __import__(modulo)
+        importlib.import_module(modulo)
     except ImportError:
-        print(f"Instalando '{pacote}' pois '{modulo}' não foi encontrado...")
+        print(f"Instalando '{pacote}' pois o módulo '{modulo}' não foi encontrado...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
+        # Atualiza o cache de importação
+        importlib.invalidate_caches()
+        try:
+            importlib.import_module(modulo)
+        except ImportError:
+            print(f"Falha ao importar '{modulo}' mesmo após a instalação.")
 
 
 
