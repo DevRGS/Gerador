@@ -37,7 +37,6 @@ dependencias = {
 for modulo, pacote in dependencias.items():
     try:
         __import__(modulo)
-        print(f"Biblioteca: {modulo} Já instalado!")
     except ImportError:
         print(f"Instalando '{pacote}' pois '{modulo}' não foi encontrado...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
