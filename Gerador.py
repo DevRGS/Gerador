@@ -34,6 +34,7 @@ dependencias = {
     "requests": "requests"
 }
 
+
 for modulo, pacote in dependencias.items():
     try:
         __import__(modulo)
