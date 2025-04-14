@@ -20,6 +20,7 @@ for modulo, pacote in dependencias.items():
         subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
 
 
+
 import os
 import requests
 import io
