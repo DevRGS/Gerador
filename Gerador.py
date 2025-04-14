@@ -4,6 +4,7 @@ import sys
 import io
 import pickle
 import json
+import subprocess
 from datetime import date
 
 # Tkinter e ttkbootstrap
@@ -20,6 +21,26 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+
+
+
+# Lista de pacotes necessários
+requisitos = [
+    "ttkbootstrap",
+    "python-pptx",
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "requests"
+]
+
+# Tenta instalar os pacotes se não estiverem disponíveis
+for pacote in requisitos:
+    try:
+        __import__(pacote.split('==')[0])
+    except ImportError:
+        print(f"Instalando pacote: {pacote}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
 
 
 def baixar_arquivo_if_needed(nome_arquivo, url):
