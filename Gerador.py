@@ -24,22 +24,22 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 
 
-# Lista de pacotes necessários
-requisitos = [
-    "ttkbootstrap",
-    "python-pptx",
-    "google-api-python-client",
-    "google-auth-httplib2",
-    "google-auth-oauthlib",
-    "requests"
-]
+# Lista com nome_de_importação : nome_para_instalar
+dependencias = {
+    "ttkbootstrap": "ttkbootstrap",
+    "pptx": "python-pptx",
+    "googleapiclient": "google-api-python-client",
+    "google.auth.transport": "google-auth-httplib2",
+    "google_auth_oauthlib": "google-auth-oauthlib",
+    "requests": "requests"
+}
 
-# Tenta instalar os pacotes se não estiverem disponíveis
-for pacote in requisitos:
+for modulo, pacote in dependencias.items():
     try:
-        __import__(pacote.split('==')[0])
+        __import__(modulo)
+        print(f"Pacote: "{pacote}" Já instalado!")
     except ImportError:
-        print(f"Instalando pacote: {pacote}...")
+        print(f"Instalando '{pacote}' pois '{modulo}' não foi encontrado...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", pacote])
 
 
