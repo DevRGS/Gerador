@@ -735,7 +735,11 @@ class PlanoFrame(ttkb.Frame):
         if cbox:
             linhas.extend(cbox)
 
-        return linhas
+        unique_mods = []
+        for mod in linhas:
+            if mod not in unique_mods:
+                unique_mods.append(mod)
+        return unique_mods
 
     def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
             valor_mensal = self.computed_mensal
