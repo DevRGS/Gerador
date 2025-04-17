@@ -646,7 +646,7 @@ class PlanoFrame(ttkb.Frame):
                 training_cost = 0.0
 
         # Atualização das labels
-        if self.current_plan == "Autoatendimento":
+        if self.spin_auto_var.get() > 0 or self.current_plan == "Autoatendimento":
             self.lbl_plano_mensal.config(text="Plano (Mensal): Não disponível")
         else:
             self.lbl_plano_mensal.config(text=f"Plano (Mensal): R$ {valor_mensal_automatico:.2f}")
@@ -750,12 +750,13 @@ class PlanoFrame(ttkb.Frame):
 
     def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
             nome_plano = self.nome_plano_var.get().strip() or "Plano"
-            
+
             valor_mensal = self.computed_mensal
             valor_anual = self.computed_anual
             desconto_percent = self.computed_desconto_percent
 
-            if self.current_plan == "Autoatendimento":
+            auto_qty = self.spin_auto_var.get()
+            if auto_qty > 0:
                 plano_mensal_str = "Não Disponível"
                 training_cost = 0.0
             else:
