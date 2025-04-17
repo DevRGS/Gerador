@@ -1229,7 +1229,7 @@ class MainApp(ttkb.Window):
         self.add_aba()
         baixar_arquivo_if_needed(
         "Proposta Comercial ConnectPlug.pptx",
-        "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Proposta%20Comercial%20Connectplug.pptx")
+        "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Proposta%20Comercial%20ConnectPlug.pptx")
 
         baixar_arquivo_if_needed(
         "Material Tecnico ConnectPlug.pptx",
