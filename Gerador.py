@@ -251,9 +251,10 @@ class PlanoFrame(ttkb.Frame):
         self.aba_index = aba_index
         self.on_close_callback = on_close_callback
 
-        # Variáveis compartilhadas para Nome do Cliente e Validade
+        # Variáveis compartilhadas para Nome do Cliente, Validade e Plano
         self.nome_cliente_var = nome_cliente_var_shared
         self.validade_proposta_var = validade_proposta_var_shared
+        self.nome_plano_var = tk.StringVar(value="") # ← Nome do plano
 
         self.current_plan = "Personalizado"
         self.spin_pdv_var = tk.IntVar(value=1)
@@ -275,6 +276,7 @@ class PlanoFrame(ttkb.Frame):
         self.user_override_discount_active = tk.BooleanVar(value=False)
         self.valor_anual_editavel = tk.StringVar(value="0.00")
         self.desconto_personalizado = tk.StringVar(value="0")
+
 
         # Armazenar valores
         self.computed_mensal = 0.0
@@ -408,6 +410,11 @@ class PlanoFrame(ttkb.Frame):
         ttkb.Entry(frame_dados, textvariable=self.nome_cliente_var).grid(row=0, column=1, padx=5, pady=2)
         ttkb.Label(frame_dados, text="Validade Proposta:").grid(row=1, column=0, sticky="w")
         ttkb.Entry(frame_dados, textvariable=self.validade_proposta_var).grid(row=1, column=1, padx=5, pady=2)
+
+        ttkb.Label(frame_dados, text="Nome do Plano:").grid(row=2, column=0, sticky="w")
+        ttkb.Entry(frame_dados, textvariable=self.nome_plano_var).grid(row=2, column=1, padx=5, pady=2)
+
+
 
     def _montar_layout_direita(self):
         frame_inc = ttkb.Labelframe(self.frame_right, text="Incrementos")
@@ -742,6 +749,8 @@ class PlanoFrame(ttkb.Frame):
         return unique_mods
 
     def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
+            nome_plano = self.nome_plano_var.get().strip() or "Plano"
+            
             valor_mensal = self.computed_mensal
             valor_anual = self.computed_anual
             desconto_percent = self.computed_desconto_percent
@@ -789,6 +798,7 @@ class PlanoFrame(ttkb.Frame):
                 "plano_mensal": plano_mensal_str,
                 "plano_anual": plano_anual_str,
                 "desconto_total": f"{desconto_percent}%",
+                "nome_do_plano": nome_plano,
                 "tipo_de_suporte": tipo_suporte,
                 "horario_de_suporte": horario_suporte,
                 "validade_proposta": self.validade_proposta_var.get(),
