@@ -706,13 +706,16 @@ class PlanoFrame(ttkb.Frame):
         if ddb_val > 0:
             inc.append(f"{ddb_val} Delivery Direto Básico")
 
-        # Notas Fiscais
-        if self.modules["3000 Notas Fiscais"].get() == 1:
-            inc.append("3000 Notas Fiscais")
+        # Notas Fiscais (prioriza Ilimitadas sobre 3000)
+        if self.modules["Notas Fiscais Ilimitadas"].get() == 1:
+            inc.append("Notas Fiscais Ilimitadas")
         else:
-            opt = self.var_notas.get()
-            if opt in ["60", "120", "250"]:
-                inc.append(f"{opt} Notas Fiscais")
+            if self.modules["3000 Notas Fiscais"].get() == 1:
+                inc.append("3000 Notas Fiscais")
+            else:
+                opt = self.var_notas.get()
+                if opt in ["60", "120", "250"]:
+                    inc.append(f"{opt} Notas Fiscais")
 
         # Adiciona incrementos à lista principal
         if inc:
