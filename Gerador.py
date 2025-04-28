@@ -328,7 +328,7 @@ class PlanoFrame(ttkb.Frame):
 
         frame_planos = ttkb.Labelframe(self.frame_left, text="Planos")
         frame_planos.pack(fill="x", pady=5)
-        for p in ["Personalizado","Ideal","Completo","Autoatendimento","Bling"]:
+        for p in ["Personalizado","Ideal","Completo","Autoatendimento","Bling", "Em Branco"]:
             ttkb.Button(frame_planos, text=p,
                         command=lambda pl=p: self.configurar_plano(pl)
                        ).pack(side="left", padx=5)
@@ -682,7 +682,7 @@ class PlanoFrame(ttkb.Frame):
         if pdv_val > 0:
             inc.append(f"{pdv_val} PDVs")
             # Adiciona "Usuário Cortesia" para PDVs extras em planos específicos
-            if self.current_plan in ["Personalizado", "Ideal", "Completo", "Em Branco"]:
+            if self.current_plan in ["Personalizado", "Ideal", "Completo"]:
                 min_pdv = PLAN_INFO[self.current_plan]["min_pdv"]
                 pdv_extras = max(0, pdv_val - min_pdv)
                 if pdv_extras > 0:
