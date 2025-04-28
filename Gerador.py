@@ -154,6 +154,15 @@ PLAN_INFO = {
             "Vendas - Estoque - Financeiro",
             "Notas Fiscais Ilimitadas"
         ]
+    },
+    "Em Branco": {
+        "base_mensal": 0.0,  # Defina o valor base desejado
+        "base_anual": 0.0,   # Defina o valor base desejado
+        "min_pdv": 0,        # Defina o mínimo de PDVs desejado
+        "min_users": 0,      # Defina o mínimo de usuários desejado
+        "mandatory": [
+            # Lista vazia, como solicitado
+        ]      
     }
 }
 
@@ -673,7 +682,7 @@ class PlanoFrame(ttkb.Frame):
         if pdv_val > 0:
             inc.append(f"{pdv_val} PDVs")
             # Adiciona "Usuário Cortesia" para PDVs extras em planos específicos
-            if self.current_plan in ["Personalizado", "Ideal", "Completo"]:
+            if self.current_plan in ["Personalizado", "Ideal", "Completo", "Em Branco"]:
                 min_pdv = PLAN_INFO[self.current_plan]["min_pdv"]
                 pdv_extras = max(0, pdv_val - min_pdv)
                 if pdv_extras > 0:
