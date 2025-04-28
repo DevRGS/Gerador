@@ -649,6 +649,9 @@ class PlanoFrame(ttkb.Frame):
         # Custo treinamento
         if self.current_plan == "Autoatendimento":
             training_cost = 0.0
+
+        else if self.current_plan == "Em Branco":
+            training_cost = 0.0    
         else:
             if valor_mensal_automatico < 549.90:
                 training_cost = 549.90 - valor_mensal_automatico
