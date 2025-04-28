@@ -566,6 +566,7 @@ class PlanoFrame(ttkb.Frame):
         base_mensal = info["base_mensal"]
         mandatory = info["mandatory"]
 
+
         parte_descontavel = base_mensal
         parte_sem_desc = 0.0
 
