@@ -658,6 +658,7 @@ class PlanoFrame(ttkb.Frame):
             else:
                 training_cost = 0.0
 
+
         # Atualização das labels
         if self.spin_auto_var.get() > 0 or self.current_plan == "Autoatendimento":
             self.lbl_plano_mensal.config(text="Plano (Mensal): Não disponível")
