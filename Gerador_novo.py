@@ -900,7 +900,6 @@ class PlanoFrame(ttkb.Frame):
                 mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
                 if custo_adicional > 0:
                     custo_adic_str = f"{custo_adicional:.2f}".replace(".", ",")
-                    label_custo = "(impl.)" if is_bling_plan else "(trein.)"
                     plano_mensal_str = f"R$ {mensal_pot_str} + R$ {custo_adic_str} {label_custo}"
                 else:
                     plano_mensal_str = f"R$ {mensal_pot_str}" # Sem custo adicional
