@@ -957,7 +957,7 @@ class PlanoFrame(ttkb.Frame):
             if is_bling_plan:
                 mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
                 impl_cost_str = f"{implementation_cost:.2f}".replace(".", ",")
-                plano_mensal_str = f"De R$ {mensal_pot_str} + R$ {impl_cost_str} (impl.)"
+                plano_mensal_str = f"De R$ {mensal_pot_str} + R$ {impl_cost_str}"
             elif self.current_plan == "Autoatendimento": # Ou self.spin_auto_var.get() > 0?
                 plano_mensal_str = "Não Disponível"
             else: # Outros planos
