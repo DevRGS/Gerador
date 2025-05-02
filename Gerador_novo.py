@@ -939,7 +939,7 @@ class PlanoFrame(ttkb.Frame):
                 unique_mods.append(mod)
         return unique_mods
 
-def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
+    def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
             # Usa nome do plano atual se não houver override
             nome_plano = self.nome_plano_var.get().strip() or self.current_plan
 
