@@ -954,6 +954,7 @@ class PlanoFrame(ttkb.Frame):
             plano_mensal_str = ""
             training_cost = 0.0 # Recalcular aqui para clareza
 
+
             if is_bling_plan:
                 mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
                 impl_cost_str = f"{implementation_cost:.2f}".replace(".", ",")
