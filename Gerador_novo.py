@@ -695,6 +695,7 @@ class PlanoFrame(ttkb.Frame):
             valor_mensal_potencial = base_mensal_calc + total_extras_cost
         # else: Para Autoatendimento, valor_mensal_potencial permanece 0 (não tem mensal)
 
+
         # --- Calcular Custo Adicional Unificado (Implementação/Treinamento) ---
         custo_adicional = 0.0
         # Aplica a regra dos 549.90 para todos, exceto Autoatendimento e Em Branco
