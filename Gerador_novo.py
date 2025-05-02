@@ -115,8 +115,7 @@ PLAN_INFO = {
         "base_anual": 170.91, # Valor mensal efetivo no plano anual (10% desc)
         "min_pdv": 1,
         "min_users": 2,
-        "mandatory": ["Relatórios","Vendas - Estoque - Financeiro"],
-        "implementation_cost": 0.0 # Adicionar para consistência
+        "mandatory": ["Relatórios","Vendas - Estoque - Financeiro"]
     },
     "Ideal": {
         "base_mensal": 359.90,
@@ -127,7 +126,7 @@ PLAN_INFO = {
             "3000 Notas Fiscais","Relatórios","Vendas - Estoque - Financeiro",
             "Estoque em Grade","Importação de XML","Produção"
         ],
-        "implementation_cost": 0.0
+
     },
     "Completo": {
         "base_mensal": 549.90,
@@ -139,8 +138,7 @@ PLAN_INFO = {
             "Delivery","Estoque em Grade","Facilita NFE","Importação de XML",
             "Notas Fiscais Ilimitadas","Ordem de Serviço","Produção","Relatório Dinâmico",
             "Relatórios","Vendas - Estoque - Financeiro"
-        ],
-        "implementation_cost": 0.0
+        ]
     },
     "Autoatendimento": {
         # Nota: A lógica de preço do Autoatendimento parece ser anual e diferente.
@@ -152,13 +150,11 @@ PLAN_INFO = {
         "mandatory": [
             "Contratos de cartões e outros","Estoque em Grade","Notas Fiscais Ilimitadas",
             "Produção","Vendas - Estoque - Financeiro"
-        ],
-         "implementation_cost": 0.0
+        ]
     },
     # --- Variações do Bling ---
     "Bling - Básico": {
         "base_mensal_original": 369.80, # Valor original para exibição "De R$..."
-        "implementation_cost": 180.10, # Custo de implementação
         "base_anual": 189.90,          # Valor MENSAL EFETIVO no plano anual
         "min_pdv": 1,
         "min_users": 5,
@@ -173,7 +169,6 @@ PLAN_INFO = {
     },
     "Bling - Com Estoque em Grade": {
         "base_mensal_original": 399.80, # Valor original para exibição "De R$..."
-        "implementation_cost": 150.10, # Custo de implementação
         "base_anual": 219.90,          # Valor MENSAL EFETIVO no plano anual
         "min_pdv": 1,
         "min_users": 5,
@@ -192,7 +187,6 @@ PLAN_INFO = {
         "min_pdv": 0,
         "min_users": 0,
         "mandatory": [],
-        "implementation_cost": 0.0
     }
 }
 
@@ -629,231 +623,181 @@ class PlanoFrame(ttkb.Frame):
         self.atualizar_valores()
 
     def atualizar_valores(self, *args):
-            if not self.current_plan or self.current_plan not in PLAN_INFO:
-                print(f"Aviso: Tentando atualizar valores para plano inválido '{self.current_plan}'")
-                return # Segurança
+        if not self.current_plan or self.current_plan not in PLAN_INFO:
+            return # Segurança
 
-            info = PLAN_INFO[self.current_plan]
-            is_bling_plan = self.current_plan.startswith("Bling -")
-            mandatory = info.get("mandatory", [])
+        info = PLAN_INFO[self.current_plan]
+        is_bling_plan = self.current_plan.startswith("Bling -")
+        is_autoatendimento_plano = self.current_plan == "Autoatendimento"
+        is_em_branco_plano = self.current_plan == "Em Branco"
+        mandatory = info.get("mandatory", [])
 
-            # --- Calcular Custo Total dos Extras (PDVs, Users, Módulos, Spinboxes) ---
-            # Este custo será adicionado ao base (para não-Bling) ou ao base anual fixo (para Bling)
-            total_extras_cost = 0.0
-            total_extras_descontavel = 0.0 # Para cálculo de desconto não-Bling
-            total_extras_nao_descontavel = 0.0 # Para cálculo de desconto não-Bling
+        # --- Calcular Custo Total dos Extras ---
+        total_extras_cost = 0.0
+        total_extras_descontavel = 0.0
+        total_extras_nao_descontavel = 0.0
+        # ... (lógica para calcular extras de PDVs, Users, Módulos, Notas, Spinboxes - permanece igual) ...
+        # PDVs Extras
+        pdv_extras = max(0, self.spin_pdv_var.get() - info["min_pdv"])
+        pdv_price = 40.00 if is_bling_plan else 59.90
+        total_extras_cost += pdv_extras * pdv_price
+        total_extras_descontavel += pdv_extras * pdv_price
 
-            # PDVs Extras
-            pdv_extras = max(0, self.spin_pdv_var.get() - info["min_pdv"])
-            pdv_price = 40.00 if is_bling_plan else 59.90
-            total_extras_cost += pdv_extras * pdv_price
-            total_extras_descontavel += pdv_extras * pdv_price # Assumindo PDVs são descontáveis
+        # Users Extras
+        user_extras = max(0, self.spin_users_var.get() - info["min_users"])
+        user_price = 20.00
+        total_extras_cost += user_extras * user_price
+        total_extras_descontavel += user_extras * user_price
 
-            # Users Extras
-            user_extras = max(0, self.spin_users_var.get() - info["min_users"])
-            user_price = 20.00
-            total_extras_cost += user_extras * user_price
-            total_extras_descontavel += user_extras * user_price # Assumindo Users são descontáveis
-
-            # Módulos Extras (Checkboxes não obrigatórios)
-            for m, var_m in self.modules.items():
-                if var_m.get() == 1 and m not in mandatory:
-                    price = precos_mensais.get(m, 0.0)
-                    total_extras_cost += price
-                    if m not in SEM_DESCONTO:
-                        total_extras_descontavel += price
-                    else:
-                        total_extras_nao_descontavel += price
-
-            # Notas Fiscais Extras (se não obrigatório/incluído)
-            nf_opt = self.var_notas.get()
-            nf_module_name = None
-            # Prioriza Ilimitadas > 3000 > Seleção
-            if self.modules.get("Notas Fiscais Ilimitadas", tk.IntVar()).get() == 1:
-                nf_module_name = "Notas Fiscais Ilimitadas"
-            elif self.modules.get("3000 Notas Fiscais", tk.IntVar()).get() == 1:
-                nf_module_name = "3000 Notas Fiscais"
-            elif self.current_plan == "Personalizado" and nf_opt in ["60","120","250"]:
-                nf_module_name = f"{nf_opt} Notas Fiscais"
-
-            if nf_module_name and nf_module_name not in mandatory:
-                price = precos_mensais.get(nf_module_name, 0.0)
+        # Módulos Extras (Checkboxes não obrigatórios)
+        for m, var_m in self.modules.items():
+            if var_m.get() == 1 and m not in mandatory:
+                price = precos_mensais.get(m, 0.0)
                 total_extras_cost += price
-                # Assumindo notas são descontáveis a menos que em SEM_DESCONTO
-                if nf_module_name not in SEM_DESCONTO:
+                if m not in SEM_DESCONTO:
                     total_extras_descontavel += price
                 else:
                     total_extras_nao_descontavel += price
 
-            # Spinboxes Extras
-            spin_extras = {
-                "TEF": self.spin_tef_var.get(),
-                "Smart TEF": self.spin_smart_tef_var.get(),
-                "Autoatendimento": self.spin_auto_var.get(),
-                "App Gestão CPlug": self.spin_app_cplug_var.get(),
-                "Delivery Direto Básico": self.spin_delivery_direto_basico_var.get(),
-                "Cardápio Digital": self.spin_cardapio_var.get()
-                # Adicione outros spinboxes aqui se houver
-            }
+        # Notas Fiscais Extras
+        nf_opt = self.var_notas.get()
+        nf_module_name = None
+        if self.modules.get("Notas Fiscais Ilimitadas", tk.IntVar()).get() == 1: nf_module_name = "Notas Fiscais Ilimitadas"
+        elif self.modules.get("3000 Notas Fiscais", tk.IntVar()).get() == 1: nf_module_name = "3000 Notas Fiscais"
+        elif self.current_plan == "Personalizado" and nf_opt in ["60","120","250"]: nf_module_name = f"{nf_opt} Notas Fiscais"
 
-            for item, qty in spin_extras.items():
-                if qty > 0:
-                    price = 0
-                    # Lógica de preço especial para alguns itens
-                    if item == "Cardápio Digital":
-                        if qty == 1: price = precos_mensais.get(item, 29.90)
-                        else: price = qty * 24.90 # Preço diferente para múltiplos
-                    elif item == "Autoatendimento":
-                        # Preço do Autoatendimento como ADD-ON (não o plano base)
-                        # O plano "Autoatendimento" tem lógica própria anual.
-                        if self.current_plan != "Autoatendimento":
-                            price = qty * precos_mensais.get(item, 299.90)
-                        # Se for o plano Autoatendimento, o custo já está no base_anual + extras? Revisar.
-                        # A lógica original adicionava 419.90 + (qty-1)*399.90 à parte_sem_desc
-                        # Isso conflita com a ideia de 'extras'. Precisa definir claramente.
-                        # Vamos assumir por enquanto que o spinbox Autoatendimento SÓ é relevante
-                        # como add-on para planos NÃO-Autoatendimento.
-                    else:
-                        price = qty * precos_mensais.get(item, 0.0)
+        if nf_module_name and nf_module_name not in mandatory:
+             price = precos_mensais.get(nf_module_name, 0.0)
+             total_extras_cost += price
+             if nf_module_name not in SEM_DESCONTO: total_extras_descontavel += price
+             else: total_extras_nao_descontavel += price
 
-                    total_extras_cost += price
-                    if item not in SEM_DESCONTO:
-                        total_extras_descontavel += price
-                    else:
-                        total_extras_nao_descontavel += price
+        # Spinboxes Extras
+        spin_extras = { "TEF": self.spin_tef_var.get(), "Smart TEF": self.spin_smart_tef_var.get(), "Autoatendimento": self.spin_auto_var.get(), "App Gestão CPlug": self.spin_app_cplug_var.get(), "Delivery Direto Básico": self.spin_delivery_direto_basico_var.get(), "Cardápio Digital": self.spin_cardapio_var.get()}
+        for item, qty in spin_extras.items():
+            if qty > 0:
+                price = 0
+                if item == "Cardápio Digital": price = precos_mensais.get(item, 29.90) if qty == 1 else qty * 24.90
+                elif item == "Autoatendimento":
+                     if not is_autoatendimento_plano: price = qty * precos_mensais.get(item, 299.90)
+                else: price = qty * precos_mensais.get(item, 0.0)
+                total_extras_cost += price
+                if item not in SEM_DESCONTO: total_extras_descontavel += price
+                else: total_extras_nao_descontavel += price
 
+        # --- Calcular Valor Mensal Potencial (Base + Extras) ---
+        valor_mensal_potencial = 0.0
+        if is_bling_plan:
+            base_mensal_orig = info.get("base_mensal_original", 0.0)
+            valor_mensal_potencial = base_mensal_orig + total_extras_cost
+        elif not is_autoatendimento_plano: # Para Personalizado, Ideal, Completo, Em Branco
+            base_mensal_calc = info.get("base_mensal", 0.0)
+            valor_mensal_potencial = base_mensal_calc + total_extras_cost
+        # else: Para Autoatendimento, valor_mensal_potencial permanece 0 (não tem mensal)
 
-            # --- Calcular Valores Finais (Mensal Potencial e Anual Efetivo) ---
-            valor_mensal_potencial = 0.0 # O valor que seria sem desconto anual
-            final_anual = 0.0 # O valor mensal efetivo no plano anual
+        # --- Calcular Custo Adicional Unificado (Implementação/Treinamento) ---
+        custo_adicional = 0.0
+        # Aplica a regra dos 549.90 para todos, exceto Autoatendimento e Em Branco
+        if not is_autoatendimento_plano and not is_em_branco_plano:
+            if valor_mensal_potencial > 0 and valor_mensal_potencial < 549.90:
+                custo_adicional = 549.90 - valor_mensal_potencial
+            # else: custo_adicional permanece 0
 
-            if is_bling_plan:
-                base_anual_rate = info.get("base_anual", 0.0) # Ex: 189.90
-                # Anual Bling = Base Fixo + Custo Total dos Extras (sem desconto adicional nos extras)
-                final_anual = base_anual_rate + total_extras_cost
+        # --- Calcular Valor Anual Efetivo ---
+        final_anual = 0.0
+        if is_bling_plan:
+            base_anual_rate = info.get("base_anual", 0.0)
+            final_anual = base_anual_rate + total_extras_cost # Bling = Base Anual Fixa + Extras
+            # Overrides Bling
+            if self.user_override_anual_active.get():
+                try: final_anual = float(self.valor_anual_editavel.get())
+                except ValueError: pass
+            # Ignorar discount override para Bling
 
-                # Mensal Potencial Bling = Base Original + Custo Total dos Extras
-                base_mensal_orig = info.get("base_mensal_original", 0.0) # Ex: 369.80
-                valor_mensal_potencial = base_mensal_orig + total_extras_cost
+        elif is_autoatendimento_plano:
+             # Lógica específica para o PLANO Autoatendimento (precisa ser clara)
+             # Assumindo base_anual é o custo MENSAL para 1 terminal no plano anual
+             base_anual_rate = info.get("base_anual", 419.90)
+             # O spin_auto_var representa terminais TOTAIS neste caso?
+             auto_qty = self.spin_auto_var.get()
+             if auto_qty < 1: auto_qty = 1 # Mínimo de 1 se escolheu o plano
+             # Custo = Base para 1 + custo adicional por extra (399.90?)
+             # Verificar se 399.90 é o preço do add-on (precos_mensais) ou um valor diferente
+             preco_auto_extra = 399.90 # Usar um valor explícito aqui
+             final_anual = base_anual_rate + max(0, auto_qty - 1) * preco_auto_extra
+             # Override anual se necessário
+             if self.user_override_anual_active.get():
+                try: final_anual = float(self.valor_anual_editavel.get())
+                except ValueError: pass
 
-                # Overrides para Bling (prioriza edição manual do anual)
-                if self.user_override_anual_active.get():
-                    try:
-                        final_anual = float(self.valor_anual_editavel.get())
-                        # Recalcular mensal potencial se anual for editado? Ou manter? Manter por simplicidade.
-                    except ValueError: pass # Mantém calculado se inválido
-                elif self.user_override_discount_active.get():
-                    # Ignorar % de desconto para Bling por enquanto, complexidade alta.
-                    # Poderia aplicar o desconto SÓ nos extras, mas foge do modelo "fixo + extras".
-                    print("Aviso: Desconto percentual não aplicável diretamente a planos Bling (usar edição anual).")
-                    # Resetar o campo de desconto?
-                    # self.desconto_personalizado.set("0")
-                    pass
+        else: # Planos Não-Bling, Não-Autoatendimento (Personalizado, Ideal, Completo, Em Branco)
+            # Calcular parte descontável total (Base + Extras descontáveis)
+            base_descontavel = info.get("base_mensal", 0.0) # Base é descontável
+            total_descontavel_calc = base_descontavel + total_extras_descontavel
+            total_nao_descontavel_calc = total_extras_nao_descontavel
 
+            # Calcular Anual com base nos descontos/overrides
+            if self.user_override_anual_active.get():
+                try: final_anual = float(self.valor_anual_editavel.get())
+                except ValueError: # Fallback 10%
+                    final_anual = (total_descontavel_calc * 0.9) + total_nao_descontavel_calc
+            elif self.user_override_discount_active.get():
+                try: desc_custom = float(self.desconto_personalizado.get())
+                except ValueError: desc_custom = 0.0
+                desc_dec = desc_custom / 100.0
+                final_anual = (total_descontavel_calc * (1 - desc_dec)) + total_nao_descontavel_calc
+            else: # Desconto Padrão 10%
+                desc_padrao = 0.10
+                final_anual = (total_descontavel_calc * (1 - desc_padrao)) + total_nao_descontavel_calc
 
-            else: # --- Planos Não-Bling (Base + Extras com Desconto) ---
-                base_mensal_calc = info.get("base_mensal", 0.0)
-                # Mensal Potencial = Base + Custo Total dos Extras
-                valor_mensal_potencial = base_mensal_calc + total_extras_cost
+        # --- Atualizar Campo Editável Anual ---
+        self.valor_anual_editavel.set(f"{final_anual:.2f}")
 
-                # Calcular base descontável e não descontável para o cálculo anual
-                base_descontavel = 0.0
-                base_nao_descontavel = 0.0
-                if info.get("base_mensal", 0.0) > 0: # Adiciona o base do plano
-                    # Assumir que o base do plano é descontável a menos que especificado
-                    # Nenhum plano base está em SEM_DESCONTO, então ok.
-                    base_descontavel += info.get("base_mensal", 0.0)
-
-
-                total_descontavel = base_descontavel + total_extras_descontavel
-                total_nao_descontavel = base_nao_descontavel + total_extras_nao_descontavel
-
-
-                # Calcular Anual com base nos descontos/overrides
-                if self.user_override_anual_active.get():
-                    try: final_anual = float(self.valor_anual_editavel.get())
-                    except ValueError: # Fallback para 10% se inválido
-                        final_anual = (total_descontavel * 0.9) + total_nao_descontavel
-                elif self.user_override_discount_active.get():
-                    try: desc_custom = float(self.desconto_personalizado.get())
-                    except ValueError: desc_custom = 0.0
-                    desc_dec = desc_custom / 100.0
-                    final_anual = (total_descontavel * (1 - desc_dec)) + total_nao_descontavel
-                else: # Desconto Padrão 10%
-                    desc_padrao = 0.10
-                    final_anual = (total_descontavel * (1 - desc_padrao)) + total_nao_descontavel
-
-                # Lógica específica do plano Autoatendimento (se diferente)
-                if self.current_plan == "Autoatendimento":
-                    # A lógica original somava 419.90 + (qty-1)*399.90. Como encaixar?
-                    # Talvez Autoatendimento devesse ser sempre 'anual'?
-                    # Por ora, a lógica acima calculará com base=0, só extras.
-                    # Precisa REVISAR a precificação do PLANO Autoatendimento.
-                    # Temporariamente, vamos forçar o valor anual se for o plano Autoatendimento base
-                    if self.spin_auto_var.get() >= 1:
-                        final_anual = 419.90 + max(0, self.spin_auto_var.get() - 1) * 399.90
-                        final_anual = info.get("base_anual", 419.90) + max(0, self.spin_auto_var.get() - 1) * 399.90 # Adiciona extras
-                        valor_mensal_potencial = 0 # Não tem mensal
-
-
-            # --- Atualizar Campo Editável Anual ---
-            self.valor_anual_editavel.set(f"{final_anual:.2f}")
-
-            # --- Calcular Custo Treinamento (Apenas Não-Bling, Não-Autoatendimento, Não-Branco) ---
-            training_cost = 0.0
-            if not is_bling_plan and self.current_plan not in ["Autoatendimento", "Em Branco"]:
-                # Usar valor_mensal_potencial para comparação
-                if valor_mensal_potencial > 0 and valor_mensal_potencial < 549.90:
-                    training_cost = 549.90 - valor_mensal_potencial
-
-
-            # --- Atualizar Labels da UI ---
-            # Label Mensal
-            mensal_str = ""
-            if is_bling_plan:
-                impl_cost = info.get("implementation_cost", 0.0)
-                mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
-                impl_cost_str = f"{impl_cost:.2f}".replace(".", ",")
-                mensal_str = f"Plano Mensal: de R$ {mensal_pot_str} + R$ {impl_cost_str} (impl.)"
-            elif self.current_plan == "Autoatendimento": # Ou spin_auto > 0?
-                mensal_str = "Plano (Mensal): Não disponível"
-            else: # Outros planos
-                mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
-                mensal_str = f"Plano (Mensal): R$ {mensal_pot_str}"
-            self.lbl_plano_mensal.config(text=mensal_str)
-
-            # Label Anual
-            anual_str = f"{final_anual:.2f}".replace(".", ",")
-            self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {anual_str}")
-
-            # Label Treinamento
-            trein_str = f"{training_cost:.2f}".replace(".", ",")
-            self.lbl_treinamento.config(text=f"Custo Treinamento (Mensal): R$ {trein_str}") # Exibir mesmo se 0? Sim.
-
-            # Label Desconto
-            desconto_calc = 0.0
-            if valor_mensal_potencial > 0:
-                # Calcula o desconto efetivo comparando o potencial com o final anual
-                desconto_calc = ((valor_mensal_potencial - final_anual) / valor_mensal_potencial) * 100
-                # Se o desconto foi editado manualmente (e não é Bling), usa ele
-                if self.user_override_discount_active.get() and not is_bling_plan:
-                    try:
-                        desconto_calc = float(self.desconto_personalizado.get())
-                    except ValueError:
-                        pass # Mantém calculado se inválido
+        # --- Atualizar Labels da UI ---
+        # Label Mensal
+        mensal_str = ""
+        if is_autoatendimento_plano:
+            mensal_str = "Plano (Mensal): Não disponível"
+        elif valor_mensal_potencial >= 0: # Exibe para Bling, Personalizado, Ideal, Completo, Em Branco
+            mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
+            if custo_adicional > 0:
+                custo_adic_str = f"{custo_adicional:.2f}".replace(".", ",")
+                label_custo = "(impl.)" if is_bling_plan else "(trein.)" # Rótulo dinâmico
+                mensal_str = f"Plano Mensal: R$ {mensal_pot_str} + R$ {custo_adic_str} {label_custo}"
             else:
-                # Se mensal potencial é 0 (ex: Autoatendimento puro), desconto é 0 ou N/A
-                desconto_calc = 0.0
+                mensal_str = f"Plano Mensal: R$ {mensal_pot_str}"
+        self.lbl_plano_mensal.config(text=mensal_str)
 
-            # Garante que desconto não seja negativo (se anual editado for maior)
-            desconto_calc = max(0, desconto_calc)
-            self.lbl_desconto.config(text=f"Desconto: {round(desconto_calc)}%")
+        # Label Anual
+        anual_str = f"{final_anual:.2f}".replace(".", ",")
+        self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {anual_str}")
 
-            # --- Armazenar Valores Computados Finais ---
-            self.computed_mensal = valor_mensal_potencial # Armazena o valor potencial antes do desconto anual
-            self.computed_anual = final_anual            # Armazena o valor mensal efetivo no plano anual
-            self.computed_desconto_percent = round(desconto_calc)
-            self.computed_implementation_cost = info.get("implementation_cost", 0.0) # Armazena custo de implementação (pode ser 0)
+        # Label Custo Adicional (Implementação/Treinamento)
+        custo_adic_str_lbl = f"{custo_adicional:.2f}".replace(".", ",")
+        label_custo_lbl = "Implementação" if is_bling_plan else "Treinamento"
+        # Mostrar apenas se custo > 0 ou sempre? Mostrar sempre para clareza.
+        self.lbl_treinamento.config(text=f"Custo {label_custo_lbl}: R$ {custo_adic_str_lbl}")
+
+        # Label Desconto
+        desconto_calc = 0.0
+        # Só calcula desconto se houver mensal potencial (exclui Autoatendimento puro)
+        if valor_mensal_potencial > 0:
+            desconto_calc = ((valor_mensal_potencial - final_anual) / valor_mensal_potencial) * 100
+            if self.user_override_discount_active.get() and not is_bling_plan and not is_autoatendimento_plano: # Não aplica % override no Bling/Auto
+                try: desconto_calc = float(self.desconto_personalizado.get())
+                except ValueError: pass
+        desconto_calc = max(0, desconto_calc) # Garante não ser negativo
+        self.lbl_desconto.config(text=f"Desconto: {round(desconto_calc)}%")
+
+
+        # --- Armazenar Valores Computados Finais ---
+        self.computed_mensal = valor_mensal_potencial
+        self.computed_anual = final_anual
+        self.computed_desconto_percent = round(desconto_calc)
+        self.computed_custo_adicional = custo_adicional # Armazena o custo calculado (0 se não aplicável)
+        # Manter separados para referência, embora agora sejam calculados da mesma forma
+        self.computed_implementation_cost = custo_adicional if is_bling_plan else 0.0
+        self.computed_training_cost = custo_adicional if not is_bling_plan and not is_autoatendimento_plano and not is_em_branco_plano else 0.0
 
     def montar_lista_modulos(self):
         linhas = []
@@ -940,82 +884,58 @@ class PlanoFrame(ttkb.Frame):
         return unique_mods
 
     def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
-            # Usa nome do plano atual se não houver override
             nome_plano = self.nome_plano_var.get().strip() or self.current_plan
-
-            valor_anual_efetivo = self.computed_anual # Valor mensal no plano anual
-            valor_mensal_potencial = self.computed_mensal # Valor cheio antes do desc anual
-            implementation_cost = self.computed_implementation_cost # Custo de impl. (0 se não Bling)
+            valor_anual_efetivo = self.computed_anual
+            valor_mensal_potencial = self.computed_mensal
+            custo_adicional = self.computed_custo_adicional # Usar o valor unificado armazenado
             desconto_percent = self.computed_desconto_percent
-
             is_bling_plan = self.current_plan.startswith("Bling -")
+            is_autoatendimento_plano = self.current_plan == "Autoatendimento"
 
             # --- Formatar String Plano Mensal ---
             plano_mensal_str = ""
-            training_cost = 0.0 # Recalcular aqui para clareza
-
-
-            if is_bling_plan:
-                mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
-                impl_cost_str = f"{implementation_cost:.2f}".replace(".", ",")
-                plano_mensal_str = f"De R$ {mensal_pot_str} + R$ {impl_cost_str}"
-            elif self.current_plan == "Autoatendimento": # Ou self.spin_auto_var.get() > 0?
+            if is_autoatendimento_plano:
                 plano_mensal_str = "Não Disponível"
-            else: # Outros planos
-                # Recalcular custo de treinamento
-                if valor_mensal_potencial > 0 and valor_mensal_potencial < 549.90 and self.current_plan != "Em Branco":
-                    training_cost = 549.90 - valor_mensal_potencial
-
+            # Excluir Em Branco da exibição de custo adicional? A lógica em atualizar_valores já faz isso.
+            elif valor_mensal_potencial >= 0:
                 mensal_pot_str = f"{valor_mensal_potencial:.2f}".replace(".", ",")
-                if training_cost > 0:
-                    training_str = f"{training_cost:.2f}".replace(".", ",")
-                    plano_mensal_str = f"R$ {mensal_pot_str} + R$ {training_str} (trein.)"
+                if custo_adicional > 0:
+                    custo_adic_str = f"{custo_adicional:.2f}".replace(".", ",")
+                    label_custo = "(impl.)" if is_bling_plan else "(trein.)"
+                    plano_mensal_str = f"R$ {mensal_pot_str} + R$ {custo_adic_str} {label_custo}"
                 else:
-                    plano_mensal_str = f"R$ {mensal_pot_str}"
+                    plano_mensal_str = f"R$ {mensal_pot_str}" # Sem custo adicional
 
             # --- Formatar String Plano Anual ---
             plano_anual_str = f"R$ {valor_anual_efetivo:.2f}".replace(".", ",")
 
-            # --- Definir Suporte ---
-            if valor_anual_efetivo >= 269.90:
-                tipo_suporte = "Estendido"
-                horario_suporte = "09:00 às 22:00 de Segunda a Sexta-feira & Sábado e Domingo das 11:00 às 21:00"
-            else:
-                tipo_suporte = "Regular"
-                horario_suporte = "09:00 às 17:00 de Segunda a Sexta-feira"
+            # --- Definir Suporte --- (Lógica permanece igual)
+            # ...
+            if valor_anual_efetivo >= 269.90: tipo_suporte = "Estendido"; horario_suporte = "09:00 às 22:00 de Segunda a Sexta-feira & Sábado e Domingo das 11:00 às 21:00"
+            else: tipo_suporte = "Regular"; horario_suporte = "09:00 às 17:00 de Segunda a Sexta-feira"
 
-            # --- Montar Lista de Módulos ---
+            # --- Montar Lista de Módulos --- (Lógica permanece igual)
             lista_mods = self.montar_lista_modulos()
             montagem = "\n".join(f"•    {m}" for m in lista_mods)
 
             # --- Calcular Economia Anual ---
             economia_str = ""
-            # Só calcula economia se houver um valor mensal potencial para comparar
-            if valor_mensal_potencial > 0 and self.current_plan != "Autoatendimento":
+            # Só calcula se houver mensal potencial (exclui Autoatendimento)
+            if valor_mensal_potencial > 0 and not is_autoatendimento_plano:
                 custo_total_anual_no_plano_anual = valor_anual_efetivo * 12
-                custo_total_anual_no_plano_mensal = 0
-
-                if is_bling_plan:
-                    # Custo mensalizado = (Mensal Potencial * 12) + Implementação (pago 1x)
-                    custo_total_anual_no_plano_mensal = (valor_mensal_potencial * 12) + implementation_cost
-                else:
-                    # Custo mensalizado = (Mensal Potencial * 12) + Treinamento (pago 1x)
-                    custo_total_anual_no_plano_mensal = (valor_mensal_potencial * 12) + training_cost
-
+                # Custo mensalizado = (Mensal Potencial * 12) + Custo Adicional (pago 1x)
+                custo_total_anual_no_plano_mensal = (valor_mensal_potencial * 12) + custo_adicional
                 economia_val = custo_total_anual_no_plano_mensal - custo_total_anual_no_plano_anual
-
                 if economia_val > 0:
                     econ = f"{economia_val:.2f}".replace(".", ",")
                     economia_str = f"Economia de R$ {econ} ao ano"
-                # else: # Opcional: mostrar se não há economia ou se anual é mais caro
-                    # economia_str = "Sem economia anual"
 
             # --- Montar Dicionário Final ---
             dados = {
                 "montagem_do_plano": montagem,
-                "plano_mensal": plano_mensal_str,
-                "plano_anual": plano_anual_str, # Valor mensal efetivo no anual
-                "desconto_total": f"{desconto_percent}%", # Desconto efetivo calculado
+                "plano_mensal": plano_mensal_str, # Formato atualizado
+                "plano_anual": plano_anual_str,
+                "desconto_total": f"{desconto_percent}%",
                 "nome_do_plano": nome_plano,
                 "tipo_de_suporte": tipo_suporte,
                 "horario_de_suporte": horario_suporte,
@@ -1026,9 +946,7 @@ class PlanoFrame(ttkb.Frame):
                 "nome_cliente": self.nome_cliente_var.get(),
                 "economia_anual": economia_str
             }
-
             return dados
-
 
 # ---------------------------------------------------------
 # Funções que geram .pptx (Proposta e Material)
