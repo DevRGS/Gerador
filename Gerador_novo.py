@@ -449,7 +449,7 @@ class PlanoFrame(ttkb.Frame):
         frame_mod = ttkb.Labelframe(self.frame_left, text="Outros Módulos")
         frame_mod.pack(fill="both", expand=True, pady=5)
 
-        # **FIX:** Use pack for the main grid frame, and pack for column frames
+        # FIX: Use pack for the main grid frame, and pack for column frames
         f_mod_grid = ttkb.Frame(frame_mod)
         f_mod_grid.pack(fill="both", expand=True, padx=5, pady=5) # Use pack here
 
@@ -818,7 +818,7 @@ class PlanoFrame(ttkb.Frame):
                 # Lidar com entrada com vírgula
                 final_anual = float(self.valor_anual_editavel.get().replace(',', '.'))
             except ValueError:
-                # Fallback para anualizar o mensal se a entrada for inválida
+                # Fallback para anualizar o mensal se a entrada for inválvida
                 final_anual = valor_mensal_automatico * 12
                 # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
                 self.valor_anual_editavel.set(f"{final_anual:.2f}".replace('.', ','))
@@ -898,7 +898,7 @@ class PlanoFrame(ttkb.Frame):
     def montar_lista_modulos(self):
         linhas = []
 
-        # Adicionar itens com base em spinboxes dedicadas se a quantidade > 0
+        # Add itens com base em spinboxes dedicadas se a quantidade > 0
         selected_pdv = self.spin_pdv_var.get()
         if selected_pdv > 0:
              linhas.append(f"{selected_pdv} PDVs")
@@ -933,13 +933,13 @@ class PlanoFrame(ttkb.Frame):
              linhas.append(f"{ddb_qty} Delivery Direto Básico")
 
 
-        # Adicionar Notas Fiscais selecionadas (apenas se quantidade > 0)
+        # Add Notas Fiscais selecionadas (apenas se quantidade > 0)
         for note_m, var in self.notes_vars.items():
             if var.get() == 1: # Quantidade é 1 se marcado
                 linhas.append(note_m)
 
 
-        # Adicionar módulos dinâmicos se a quantidade > 0
+        # Add módulos dinâmicos se a quantidade > 0
         for module_name in self.quantifiable_modules:
             qty = self.module_quantities[module_name].get()
             if qty > 0:
@@ -950,7 +950,7 @@ class PlanoFrame(ttkb.Frame):
                     linhas.append(f"{qty} {module_name}{'s' if qty > 1 else ''}")
 
 
-        # Adicionar módulos obrigatórios fixos que não têm preço/spinbox se incluídos no plano
+        # Add módulos obrigatórios fixos que não têm preço/spinbox se incluídos no plano
         mandatory = PLAN_INFO.get(self.current_plan, {}).get("mandatory", [])
         fixed_no_price_modules = [
             "Suporte Técnico - Via chamados",
@@ -994,7 +994,7 @@ class PlanoFrame(ttkb.Frame):
 
         # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
         plano_mensal_str = f"R$ {valor_mensal:.2f}".replace(".", ",")
-        # Adicionar custo de treinamento à exibição se > 0
+        # Add custo de treinamento à exibição se > 0
         if training_cost > 0.01: # Usar um pequeno limiar
              # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
              part_mensal_formatted = f"{valor_mensal:.2f}".replace(".", ",")
@@ -1037,8 +1037,8 @@ class PlanoFrame(ttkb.Frame):
             "plano_anual": plano_anual_str,
             "desconto_total": f"{desconto_percent}%",
             "nome_do_plano": nome_plano,
-            "tipo_de_suporte": tipo_suporte,
-            "horario_de_suporte": horario_suporte,
+            "tipo_de_suporte": tipo_de_suporte,
+            "horario_de_suporte": horario_de_suporte,
             "validade_proposta": self.validade_proposta_var.get(),
             "nome_closer": nome_closer,
             "celular_closer": cel_closer,
