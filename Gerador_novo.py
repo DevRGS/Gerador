@@ -315,9 +315,6 @@ class PlanoFrame(ttkb.Frame):
         self.validade_proposta_var = validade_proposta_var_shared
         self.nome_plano_var = tk.StringVar(value="") # ← Nome do plano
 
-        # Padrão para formatar valores monetários
-        self.currency_format = "{:.2f}".replace('.', ',')
-
         # Plano atual (padrão será definido em configure_plano)
         self.current_plan = "Plano PDV"
 
@@ -459,7 +456,8 @@ class PlanoFrame(ttkb.Frame):
         # Create column frames and pack them side-by-side within f_mod_grid
         num_columns = 2 # Or 3, depending on space
         column_frames = []
-        col_widgets = [[] for _ in range(num_columns)] # List of lists to hold widgets per column
+        # Reinitialize col_widgets as it's not used after creating frames anymore
+        # col_widgets = [[] for _ in range(num_columns)] # List of lists to hold widgets per column
 
         for col_idx in range(num_columns):
             col_frame = ttkb.Frame(f_mod_grid)
@@ -822,7 +820,8 @@ class PlanoFrame(ttkb.Frame):
             except ValueError:
                 # Fallback para anualizar o mensal se a entrada for inválida
                 final_anual = valor_mensal_automatico * 12
-                self.valor_anual_editavel.set(self.currency_format.format(final_anual))
+                # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+                self.valor_anual_editavel.set(f"{final_anual:.2f}".replace('.', ','))
         elif self.user_override_discount_active.get():
             try:
                 # Lidar com entrada com vírgula
@@ -838,7 +837,8 @@ class PlanoFrame(ttkb.Frame):
             # Garantir que o preço anual não seja menor que a parte não descontável anualizada
             final_anual = max(final_anual, parte_sem_desc * 12)
 
-            self.valor_anual_editavel.set(self.currency_format.format(final_anual))
+            # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+            self.valor_anual_editavel.set(f"{final_anual:.2f}".replace('.', ','))
         else:
             # Desconto anual padrão (10%) na parte descontável
             desc_padrao = 0.10
@@ -849,17 +849,21 @@ class PlanoFrame(ttkb.Frame):
             # Garantir que o preço anual não seja menor que a parte não descontável anualizada
             final_anual = max(final_anual, parte_sem_desc * 12)
 
-            self.valor_anual_editavel.set(self.currency_format.format(final_anual))
+            # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+            self.valor_anual_editavel.set(f"{final_anual:.2f}".replace('.', ','))
 
 
         # Custo treinamento (simplificado para 0 com base na falta de novas regras)
         training_cost = 0.0
-        self.lbl_treinamento.config(text=f"Custo Treinamento (Mensal): R$ {self.currency_format.format(training_cost)}")
+        # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+        self.lbl_treinamento.config(text=f"Custo Treinamento (Mensal): R$ {training_cost:.2f}".replace('.', ','))
 
 
         # Atualização das labels
-        self.lbl_plano_mensal.config(text=f"Plano (Mensal): R$ {self.currency_format.format(valor_mensal_automatico)}")
-        self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {self.currency_format.format(final_anual)}")
+        # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+        self.lbl_plano_mensal.config(text=f"Plano (Mensal): R$ {valor_mensal_automatico:.2f}".replace('.', ','))
+        # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+        self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {final_anual:.2f}".replace('.', ','))
 
 
         # Calcular e exibir porcentagem de desconto
@@ -988,15 +992,19 @@ class PlanoFrame(ttkb.Frame):
         # Cálculo do custo de treinamento (atualmente 0.0)
         training_cost = 0.0 # Simplificado conforme decisão em atualizar_valores
 
-        plano_mensal_str = f"R$ {self.currency_format.format(valor_mensal)}"
+        # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+        plano_mensal_str = f"R$ {valor_mensal:.2f}".replace(".", ",")
         # Adicionar custo de treinamento à exibição se > 0
         if training_cost > 0.01: # Usar um pequeno limiar
-             part_mensal_formatted = self.currency_format.format(valor_mensal)
-             part_training_formatted = self.currency_format.format(training_cost)
+             # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+             part_mensal_formatted = f"{valor_mensal:.2f}".replace(".", ",")
+             # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+             part_training_formatted = f"{training_cost:.2f}".replace(".", ",")
              plano_mensal_str = f"R$ {part_mensal_formatted} + R$ {part_training_formatted} (Treinamento)"
 
 
-        plano_anual_str = f"R$ {self.currency_format.format(valor_anual)}"
+        # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+        plano_anual_str = f"R$ {valor_anual:.2f}".replace(".", ",")
 
         # Lógica de suporte baseada no valor anual (mantida)
         if valor_anual >= 269.90: # Este limiar pode precisar de ajuste com base nos novos níveis de preços
@@ -1016,7 +1024,8 @@ class PlanoFrame(ttkb.Frame):
         economia_val = custo_anual_mensalizado - custo_anual_plano
 
         if economia_val > 0.1: # Usar um pequeno limiar para comparação de ponto flutuante
-             econ = self.currency_format.format(economia_val)
+             # FIX: Formatar o float para string ANTES de substituir o ponto pela vírgula
+             econ = f"{economia_val:.2f}".replace(".", ",")
              economia_str = f"Economia de R$ {econ} ao ano"
         else:
              economia_str = ""
