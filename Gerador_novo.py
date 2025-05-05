@@ -1,4 +1,3 @@
-# coding: utf-8
 import sys
 import subprocess
 import importlib
@@ -26,6 +25,7 @@ for modulo, pacote in dependencias.items():
         except ImportError:
             print(f"Falha ao importar '{modulo}' mesmo após a instalação.")
 
+
 import os
 import requests
 import io
@@ -48,66 +48,41 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
+
+
+
 def baixar_arquivo_if_needed(nome_arquivo, url):
     if not os.path.exists(nome_arquivo):
         print(f"Baixando {nome_arquivo}...")
-        try:
-            r = requests.get(url, timeout=30) # Timeout aumentado
-            r.raise_for_status() # Verifica erros HTTP
-            with open(nome_arquivo, "wb") as f:
-                f.write(r.content)
-            print(f"{nome_arquivo} baixado com sucesso.")
-        except requests.exceptions.RequestException as e:
-             showerror("Erro de Download", f"Não foi possível baixar '{nome_arquivo}'.\nVerifique sua conexão ou a URL.\nErro: {e}")
-             # Decide se quer parar a execução ou apenas avisar
-             # raise e # Descomente para parar se o download for crítico
+        r = requests.get(url)
+        with open(nome_arquivo, "wb") as f:
+            f.write(r.content)
 
 
 # ---------------------------------------------------------
 # Ajustes Globais
 # ---------------------------------------------------------
-# Tenta encontrar o diretório do script de forma mais robusta
-if getattr(sys, 'frozen', False):
-    # Se rodando como executável (pyinstaller)
-    script_dir = os.path.dirname(sys.executable)
-elif __file__:
-    # Se rodando como script .py
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-else:
-    # Fallback para diretório atual
-    script_dir = os.getcwd()
-
-try:
-    os.chdir(script_dir)
-    print("Diretório de trabalho definido para:", os.getcwd())
-except Exception as e:
-    print(f"Aviso: Não foi possível mudar para o diretório do script: {e}")
-    print(f"Diretório atual: {os.getcwd()}")
-
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+print("Novo diretório de trabalho:", os.getcwd())
 
 CONFIG_FILE = "config_vendedor.json"
 MAX_ABAS = 10
+
 
 # ---------------------------------------------------------
 # Configurações de vendedor (salvar/carregar)
 # ---------------------------------------------------------
 def carregar_config(nome_closer_var, celular_closer_var, email_closer_var):
-    config_path = os.path.join(script_dir, CONFIG_FILE) # Garante caminho correto
-    if os.path.exists(config_path):
+    if os.path.exists(CONFIG_FILE):
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             nome_closer_var.set(data.get("nome_vendedor", ""))
             celular_closer_var.set(data.get("celular_vendedor", ""))
             email_closer_var.set(data.get("email_vendedor", ""))
-        except json.JSONDecodeError:
-            print(f"Aviso: Arquivo '{CONFIG_FILE}' parece corrompido. Ignorando.")
-            pass # Ignora arquivo corrompido
-        except Exception as e:
-            print(f"Erro desconhecido ao carregar config: {e}")
-    # else: # Opcional: Criar arquivo config vazio se não existir
-    #     salvar_config("", "", "") # Cria com valores vazios
-
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
 
 def salvar_config(nome_closer, celular_closer, email_closer):
     dados = {
@@ -115,171 +90,212 @@ def salvar_config(nome_closer, celular_closer, email_closer):
         "celular_vendedor": celular_closer,
         "email_vendedor": email_closer
     }
-    config_path = os.path.join(script_dir, CONFIG_FILE) # Garante caminho correto
-    # Tenta tornar o arquivo gravável se existir (útil em alguns sistemas)
-    if os.path.exists(config_path):
+    # Attempt to make it writable, handle error if not possible
+    if os.path.exists(CONFIG_FILE):
         try:
-            os.chmod(config_path, 0o666)
-        except OSError:
-            pass # Ignora erro se não puder mudar permissão
+            os.chmod(CONFIG_FILE, 0o666)
+        except PermissionError:
+            print(f"Warning: Could not change permissions for {CONFIG_FILE}")
+            pass # Continue trying to write
     try:
-        with open(config_path, "w", encoding="utf-8") as f:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(dados, f, indent=4, ensure_ascii=False)
     except PermissionError:
-        print(f"Aviso: Sem permissão para salvar {CONFIG_FILE} em {script_dir}")
-    except Exception as e:
-        print(f"Erro ao salvar config: {e}")
+        print(f"Error: Permission denied to write to {CONFIG_FILE}")
+        pass
 
 
 # ---------------------------------------------------------
-# Dados de Planos e Tabelas de Preço
-# --- *** MOVIDO PARA ANTES DE PLAN_INFO *** ---
+# Dados de Planos e Tabelas de Preço (Ajustado conforme solicitação anterior)
 # ---------------------------------------------------------
-
-# Dicionário de preços mensais dos EXTRAS
-precos_mensais = {
-    # Módulos que são *sempre* fixos não precisam de preço aqui
-    # Preços para módulos que podem ser OPCIONAIS em alguns planos
-    "Importação de XML": 29.00,
-    "Produção": 30.00,
-    "Promoções": 24.50,
-    "Hub de Delivery": 79.00,
-    "Ordem de Serviço": 20.00,
-    "App Gestão CPlug": 20.00,
-    "Painel Senha Mobile": 49.00,
-    "Controle de Mesas": 49.00,
-    "Marketing": 24.50,
-    "Relatório Dinâmico": 50.00,
-    "Atualização em tempo real": 49.00,
-    "Facilita NFE": 99.00,
-    "Conciliação Bancária": 50.00,
-    "Contratos de cartões e outros": 50.00,
-    "Suporte Técnico - Estendido": 99.00,
-    "Smart TEF": 49.90, # Usado para cálculo de extras no Gestão e Performance
-
-    # Opcionais puros
-    "Smart Menu": 99.90,
-    "Terminais Autoatendimento": 199.00, # Custo por terminal extra
-    "Delivery Direto Profissional": 200.00,
-    "Delivery Direto VIP": 300.00,
-    "TEF": 99.90,
-    "Cardápio digital": 99.00,
-    "Backup Realtime": 199.90,
-    "Business Intelligence (BI)": 199.00,
-    "Programa de Fidelidade": 299.90,
-    "Integração Tap": 299.00,
-    "Integração API": 299.00,
-}
-
-# Módulos SEM DESCONTO (se a lógica de desconto manual ainda for relevante)
-# Itens cujo preço mensal não deve ser afetado pelo % de desconto editado
-SEM_DESCONTO = {
-    "TEF", "Terminais Autoatendimento", "Smart TEF",
-    "Delivery Direto Profissional", "Delivery Direto VIP",
-    "Programa de Fidelidade", "Integração Tap", "Integração API",
-    "Business Intelligence (BI)", "Backup Realtime",
-}
-
-# Custos Adicionais (fixos por item extra)
-PRECO_EXTRA_USUARIO = 19.00
-PRECO_EXTRA_PDV_GESTAO_PERFORMANCE = 59.90
-PRECO_EXTRA_PDV_BLING = 40.00
-
-# Listas de planos para UI
-LISTA_PLANOS_UI = ["PDV Básico", "Gestão", "Performance", "Autoatendimento", "Bling", "Em Branco"]
-LISTA_PLANOS_BLING = ["Bling - Básico", "Bling - Com Estoque em Grade"]
-
-# Informações dos Planos Base
 PLAN_INFO = {
-    "PDV Básico": {
-        # base_mensal AGORA significa -> Custo Mensal Efetivo no contrato Anual
-        "base_mensal": 110.00,
-        "min_pdv": 1, "min_users": 2,
-        "max_extra_users": 1, "max_extra_pdvs": 0,
-        "mandatory": ["Usuários", "30 Notas Fiscais", "Suporte Técnico - Via chamados", "Relatório Básico", "PDV - Frente de Caixa"],
-        "allowed_optionals": ["Smart Menu", "Terminais Autoatendimento", "Hub de Delivery", "Delivery Direto Profissional", "Delivery Direto VIP", "TEF", "Importação de XML", "Cardápio digital"]
+    "Plano PDV": {
+        "base_mensal": 99.00,
+        "base_anual": 0.0,  # Valor anual não fornecido nos parâmetros
+        "min_pdv": 1,
+        "min_users": 2,
+        "mandatory": [
+            "Suporte Técnico - Via chamados",
+            "Relatório Básico",
+            "PDV - Frente de Caixa",
+            "30 Notas Fiscais"
+        ]
     },
-    "Gestão": {
-        "base_mensal": 221.11,
-        "min_pdv": 2, "min_users": 3,
-        "max_extra_users": 2, "max_extra_pdvs": 1,
-        "mandatory": ["Notas Fiscais Ilimitadas", "Importação de XML", "PDV - Frente de Caixa", "Usuários", "Painel Senha TV", "Estoque em Grade", "Relatórios", "Suporte Técnico - Via chamados", "Suporte Técnico - Via chat", "Delivery", "Relatório KDS"],
-        "allowed_optionals": ["Facilita NFE", "Conciliação Bancária", "Contratos de cartões e outros", "Delivery Direto Profissional", "Delivery Direto VIP", "TEF", "Integração API", "Business Intelligence (BI)", "Backup Realtime", "Cardápio digital", "Smart Menu", "Hub de Delivery", "Ordem de Serviço", "App Gestão CPlug", "Painel Senha Mobile", "Controle de Mesas", "Produção", "Promoções", "Marketing", "Relatório Dinâmico", "Atualização em tempo real", "Smart TEF", "Terminais Autoatendimento", "Suporte Técnico - Estendido"]
+    "Plano Gestão": {
+        "base_mensal": 199.00,
+        "base_anual": 0.0,  # Valor anual não fornecido nos parâmetros
+        "min_pdv": 2,
+        "min_users": 3,
+        "mandatory": [
+            "Notas Fiscais Ilimitadas",
+            "Importação de XML",
+            "PDV - Frente de Caixa",
+            "Painel Senha TV",
+            "Estoque em Grade",
+            "Relatórios",
+            "Suporte Técnico - Via chamados",
+            "Suporte Técnico - Via chat",
+            "Delivery",
+            "Relatório KDS"
+        ]
     },
-    "Performance": {
-        "base_mensal": 554.44,
-        "min_pdv": 3, "min_users": 5,
-        "max_extra_users": 5, "max_extra_pdvs": 2,
-        "mandatory": ["Produção", "Promoções", "Notas Fiscais Ilimitadas", "Importação de XML", "Hub de Delivery", "Ordem de Serviço", "Delivery", "App Gestão CPlug", "Relatório KDS", "Painel Senha TV", "Painel Senha Mobile", "Controle de Mesas", "Estoque em Grade", "Marketing", "Relatórios", "Relatório Dinâmico", "Atualização em tempo real", "Facilita NFE", "Conciliação Bancária", "Contratos de cartões e outros", "Suporte Técnico - Via chamados", "Suporte Técnico - Via chat", "Suporte Técnico - Estendido", "PDV - Frente de Caixa", "Smart TEF", "Usuários"],
-        "allowed_optionals": ["TEF", "Programa de Fidelidade", "Integração Tap", "Integração API", "Business Intelligence (BI)", "Backup Realtime", "Cardápio digital", "Smart Menu", "Terminais Autoatendimento", "Delivery Direto Profissional", "Delivery Direto VIP"]
+    "Plano Performance": {
+        "base_mensal": 499.00,
+        "base_anual": 0.0,  # Valor anual não fornecido nos parâmetros
+        "min_pdv": 3,
+        "min_users": 5,
+        "mandatory": [
+            "Produção",
+            "Promoções",
+            "Notas Fiscais Ilimitadas",
+            "Importação de XML",
+            "Hub de Delivery",
+            "Ordem de Serviço",
+            "Delivery",
+            "App Gestão CPlug",
+            "Relatório KDS",
+            "Painel Senha TV",
+            "Painel Senha Mobile",
+            "Controle de Mesas",
+            "Estoque em Grade",
+            "Marketing",
+            "Relatórios",
+            "Relatório Dinâmico",
+            "Atualização em tempo real",
+            "Facilita NFE",
+            "Conciliação Bancária",
+            "Contratos de cartões e outros",
+            "Suporte Técnico - Via chamados",
+            "Suporte Técnico - Via chat",
+            "Suporte Técnico - Estendido",
+            "PDV - Frente de Caixa", # Incluído como feature, quantidade base em min_pdv
+            "Smart TEF" # Incluído como feature, quantidade base (3x) no plano Performance
+        ]
     },
+     # Mantendo planos antigos se ainda forem relevantes na interface
+     # Remova-os se os novos planos os substituírem totalmente
     "Autoatendimento": {
-        "base_mensal": 419.90, # Assumindo que este é o Custo Mensal Efetivo no anual para 1 terminal
-        "min_pdv": 0, "min_users": 1,
-        "max_extra_users": 998, "max_extra_pdvs": 99,
-        "mandatory": ["Contratos de cartões e outros", "Estoque em Grade", "Notas Fiscais Ilimitadas", "Produção", "Terminais Autoatendimento"], # Adicionado TAA como mandatório aqui
-        "allowed_optionals": [] # Nenhum opcional extra?
+        "base_mensal": 0.0,
+        "base_anual": 419.90,
+        "min_pdv": 0,
+        "min_users": 1,
+        "mandatory": [
+            "Contratos de cartões e outros","Estoque em Grade","Notas Fiscais Ilimitadas",
+            "Produção","Vendas - Estoque - Financeiro" # Assumindo Vendas... é incluído
+        ]
     },
-    "Bling - Básico": {
-        "base_mensal": 189.90, # Este JÁ É o valor mensal efetivo no anual
-        "min_pdv": 1, "min_users": 5,
-        "max_extra_users": 994, "max_extra_pdvs": 98,
-        "mandatory": ["Relatórios", "Notas Fiscais Ilimitadas", "PDV - Frente de Caixa", "Usuários"], # Adicionado PDV/User
-        "allowed_optionals": [], # Definir se houver
-    },
-    "Bling - Com Estoque em Grade": {
-        "base_mensal": 219.90, # Este JÁ É o valor mensal efetivo no anual
-        "min_pdv": 1, "min_users": 5,
-        "max_extra_users": 994, "max_extra_pdvs": 98,
-        "mandatory": ["Relatórios", "Notas Fiscais Ilimitadas", "Estoque em Grade", "PDV - Frente de Caixa", "Usuários"], # Adicionado PDV/User
-        "allowed_optionals": [], # Definir se houver
+    "Bling": {
+        "base_mensal": 369.80,
+        "base_anual": 189.90,
+        "min_pdv": 1,
+        "min_users": 5,
+        "mandatory": [
+            "Relatórios",
+            "Vendas - Estoque - Financeiro", # Assumindo Vendas... é incluído
+            "Notas Fiscais Ilimitadas"
+        ]
     },
     "Em Branco": {
         "base_mensal": 0.0,
-        "min_pdv": 0, "min_users": 0,
-        "max_extra_users": 999, "max_extra_pdvs": 99,
-        "mandatory": [],
-        # Usa precos_mensais (que agora está definido)
-        "allowed_optionals": list(precos_mensais.keys()) + ["PDV - Frente de Caixa", "Usuários", "Smart TEF", "Terminais Autoatendimento"]
+        "base_anual": 0.0,
+        "min_pdv": 0,
+        "min_users": 0,
+        "mandatory": []
     }
 }
 
+# Módulos que não recebem desconto (mantido do código original + Terminais Autoatendimento)
+SEM_DESCONTO = {
+    "TEF",
+    "Terminais Autoatendimento", # Adicionado com base na lógica de preço da nova lista
+    "Smart TEF",
+    "Domínio Próprio",
+    "Gestão de Entregadores",
+    "Robô de WhatsApp + Recuperador de Pedido",
+    "Gestão de Redes Sociais",
+    "Combo de Logística",
+    "Painel MultiLojas",
+    "Programa de Fidelidade",
+    "Integração API",
+    "Integração TAP",
+    "Central Telefônica (Base)",
+    "Central Telefônica (Por Loja)"
+    # Tipos de Notas (ex: "60 Notas Fiscais") não estão no SEM_DESCONTO com base nos dados originais
+}
 
-# ---------------------------------------------------------
-# *** CORRIGIDO *** Função utilitária para substituir placeholders no Slide
-# ---------------------------------------------------------
+precos_mensais = {
+    "Conciliação Bancária": 50.00,
+    "Contratos de cartões e outros": 50.00,
+    "Controle de Mesas": 49.00,
+    "Delivery": 30.00,
+    "Estoque em Grade": 30.00,
+    "Importação de XML": 29.00,
+    "Ordem de Serviço": 20.00,
+    "Produção": 30.00,
+    "Relatório Dinâmico": 50.00,
+    "Notas Fiscais Ilimitadas": 119.90,
+    "3000 Notas Fiscais": 0.0, # Preço 0.0, provavelmente incluído ou opção de nível gratuito
+    "30 Notas Fiscais": 0.0,   # Preço 0.0 com base na inclusão fixa do PDV
+
+    "60 Notas Fiscais": 40.00,
+    "120 Notas Fiscais": 70.00,
+    "250 Notas Fiscais": 90.00,
+
+    "TEF": 99.90,
+    "Smart TEF": 49.90,
+    "Backup Realtime": 199.90,
+    "Atualização em tempo real": 49.00,
+    "Business Intelligence (BI)": 199.00,
+    "Hub de Delivery": 79.00,
+    "Facilita NFE": 99.00,
+    "Smart Menu": 99.00,
+    "Cardápio digital": 99.00, # Renomeado de Cardápio Digital, preço ajustado
+    "Programa de Fidelidade": 299.90,
+    "Terminais Autoatendimento": 199.00, # Nome e preço ajustados de Autoatendimento
+    "Delivery Direto Básico": 247.00,
+    "Delivery Direto Profissional": 200.00,
+    "Delivery Direto VIP": 300.00,
+    "Promoções": 24.50,
+    "Marketing": 24.50,
+    "Painel de Senha": 49.90, # Mantendo o original se ainda for relevante, mas novas listas têm tipos específicos
+    "Integração TAP": 299.00,
+    "Integração API": 299.00,
+    "Relatório KDS": 29.90, # Preço 29.90, também listado como fixo.
+    "App Gestão CPlug": 20.00,
+    "Domínio Próprio": 19.90,
+    "Gestão de Entregadores": 19.90,
+    "Robô de WhatsApp + Recuperador de Pedido": 99.90,
+    "Gestão de Redes Sociais": 9.90,
+    "Combo de Logística": 74.90,
+    "Painel MultiLojas": 199.00,
+    "Central Telefônica (Base)": 399.90,
+    "Central Telefônica (Por Loja)": 49.90,
+    "Painel Senha Mobile": 49.00, # Novo módulo da lista
+    "Suporte Técnico - Estendido": 99.00 # Novo módulo da lista
+    # Módulos fixos sem preço listado e não nos precos_mensais originais são assumidos como incluídos no preço base
+    # ex: "Suporte Técnico - Via chamados", "Relatório Básico", "Painel Senha TV", "Relatórios", "Suporte Técnico - Via chat", "Vendas - Estoque - Financeiro"
+}
+
+
+# Função utilitária para substituir placeholders no Slide (Mantida)
 def substituir_placeholders_no_slide(slide, dados):
-    """
-    Substitui os placeholders (chaves do dicionário 'dados') pelo seu valor
-    correspondente em todos os text frames do slide.
-    Preserva a formatação original do run onde o placeholder está.
-    """
     for shape in slide.shapes:
-        if not shape.has_text_frame:
-            continue
-        for paragraph in shape.text_frame.paragraphs:
-            # É crucial iterar sobre os runs originais
-            for run in paragraph.runs:
-                # Preserva o texto original do run para comparação
-                original_text = run.text
-                modified_text = original_text # Começa com o texto original
+        if shape.has_text_frame:
+            for paragraph in shape.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    txt = run.text
+                    # Substituir placeholders (ex: {{NOME_CLIENTE}} ou {NOME_CLIENTE})
+                    import re
+                    for k, v in dados.items():
+                         # Substitui {{KEY}} e {KEY}
+                         txt = txt.replace("{{" + k + "}}", str(v)).replace("{" + k + "}", str(v))
 
-                # Tenta substituir cada placeholder no texto deste run
-                for k, v in dados.items():
-                    placeholder = f"{{{k}}}" # Assume placeholders como {chave}
-                    # Garante que v seja string
-                    v_str = str(v) if v is not None else ""
-                    # Faz a substituição no texto modificado
-                    if placeholder in modified_text:
-                        modified_text = modified_text.replace(placeholder, v_str)
-
-                # Apenas atualiza o run.text se houve mudança
-                if modified_text != original_text:
-                    run.text = modified_text
+                    run.text = txt
 
 
 # ---------------------------------------------------------
-# Classe PlanoFrame (Aba) - Nenhuma alteração necessária aqui
+# Classe PlanoFrame (Aba)
+#   => contém toda a lógica de cálculo do plano
 # ---------------------------------------------------------
 class PlanoFrame(ttkb.Frame):
     def __init__(
@@ -294,694 +310,721 @@ class PlanoFrame(ttkb.Frame):
         self.aba_index = aba_index
         self.on_close_callback = on_close_callback
 
-        # Variáveis compartilhadas
+        # Variáveis compartilhadas para Nome do Cliente, Validade e Plano
         self.nome_cliente_var = nome_cliente_var_shared
         self.validade_proposta_var = validade_proposta_var_shared
-        self.nome_plano_var = tk.StringVar(value="") # Nome editável do plano
+        self.nome_plano_var = tk.StringVar(value="") # ← Nome do plano
 
-        self.current_plan = "PDV Básico" # Plano default
-        self.spin_pdv_var = tk.IntVar(value=1)
-        self.spin_users_var = tk.IntVar(value=1)
+        # Padrão para formatar valores monetários
+        self.currency_format = "{:.2f}".replace('.', ',')
+
+        # Plano atual (padrão será definido em configure_plano)
+        self.current_plan = "Plano PDV"
+
+        # Variáveis para spinboxes de incremento dedicadas (mantidas)
+        self.spin_pdv_var = tk.IntVar(value=0)
+        self.spin_users_var = tk.IntVar(value=0)
+        self.spin_terminais_auto_var = tk.IntVar(value=0) # Renomeado para clareza
+        self.spin_cardapio_var = tk.IntVar(value=0)
+        self.spin_tef_var = tk.IntVar(value=0)
         self.spin_smart_tef_var = tk.IntVar(value=0)
-        self.spin_terminais_aa_var = tk.IntVar(value=0) # Novo spinbox para Autoatendimento
+        self.spin_app_cplug_var = tk.IntVar(value=0)
+        self.spin_delivery_direto_basico_var = tk.IntVar(value=0)
 
-        # Módulos (checkboxes)
-        self.modules = {
-            # Fixos (necessários para lógica, mas controlados por código/plano)
-            "Usuários": tk.IntVar(), "30 Notas Fiscais": tk.IntVar(), "Suporte Técnico - Via chamados": tk.IntVar(),
-            "Relatório Básico": tk.IntVar(), "PDV - Frente de Caixa": tk.IntVar(), "Notas Fiscais Ilimitadas": tk.IntVar(),
-            "Importação de XML": tk.IntVar(), "Painel Senha TV": tk.IntVar(), "Estoque em Grade": tk.IntVar(),
-            "Relatórios": tk.IntVar(), "Suporte Técnico - Via chat": tk.IntVar(), "Delivery": tk.IntVar(),
-            "Relatório KDS": tk.IntVar(), "Produção": tk.IntVar(), "Promoções": tk.IntVar(), "Hub de Delivery": tk.IntVar(),
-            "Ordem de Serviço": tk.IntVar(), "App Gestão CPlug": tk.IntVar(), "Painel Senha Mobile": tk.IntVar(),
-            "Controle de Mesas": tk.IntVar(), "Marketing": tk.IntVar(), "Relatório Dinâmico": tk.IntVar(),
-            "Atualização em tempo real": tk.IntVar(), "Facilita NFE": tk.IntVar(), "Conciliação Bancária": tk.IntVar(),
-            "Contratos de cartões e outros": tk.IntVar(), "Suporte Técnico - Estendido": tk.IntVar(), "Smart TEF": tk.IntVar(),
-            "Terminais Autoatendimento": tk.IntVar(), # Adicionado aqui para rastreio interno
-            # Opcionais (reais checkboxes que aparecem na UI)
-            "Smart Menu": tk.IntVar(),
-            "Delivery Direto Profissional": tk.IntVar(),
-            "Delivery Direto VIP": tk.IntVar(), "TEF": tk.IntVar(), "Cardápio digital": tk.IntVar(),
-            "Integração API": tk.IntVar(), "Business Intelligence (BI)": tk.IntVar(), "Backup Realtime": tk.IntVar(),
-            "Programa de Fidelidade": tk.IntVar(), "Integração Tap": tk.IntVar(),
+        # Variáveis e widgets para os tipos de Notas Fiscais (novo layout com checkboxes)
+        self.notes_vars = {
+            "30 Notas Fiscais": tk.IntVar(value=0), # Usar IntVar 0 ou 1
+            "60 Notas Fiscais": tk.IntVar(value=0),
+            "120 Notas Fiscais": tk.IntVar(value=0),
+            "250 Notas Fiscais": tk.IntVar(value=0),
+            "3000 Notas Fiscais": tk.IntVar(value=0),
+            "Notas Fiscais Ilimitadas": tk.IntVar(value=0)
         }
-        self.check_buttons = {} # Dicionário para guardar os widgets Checkbutton
+        self.notes_checkbuttons = {} # Para armazenar referências dos widgets
 
-        # Overrides de cálculo
+        # Módulos Dinâmicos (Checkbox + Spinbox)
+        # Armazenar variáveis de quantidade (IntVars)
+        self.module_quantities = {}
+        # Armazenar referências dos widgets {'nome_modulo': {'check': cb, 'spin': sp, 'check_var': tk.BooleanVar, 'spin_var': tk.IntVar}}
+        self.module_widgets = {}
+
+        # Definir a lista de módulos que receberão o tratamento Checkbox+Spinbox
+        # Esta lista é derivada de precos_mensais, excluindo spinboxes dedicadas e itens fixos sem preço
+        dedicated_spinbox_module_names = [
+             "Terminais Autoatendimento", # Nome em precos_mensais
+             "Cardápio digital",       # Nome em precos_mensais
+             "TEF",
+             "Smart TEF",
+             "App Gestão CPlug",
+             "Delivery Direto Básico"
+        ]
+        notes_module_names = list(self.notes_vars.keys())
+
+        self.quantifiable_modules = [
+             m for m in precos_mensais.keys()
+             if m not in dedicated_spinbox_module_names and m not in notes_module_names
+        ]
+
+
+        # Inicializar variáveis de quantidade para módulos dinâmicos
+        for module_name in self.quantifiable_modules:
+            self.module_quantities[module_name] = tk.IntVar(value=0)
+
+
+        # Overrides de cálculo (mantidos)
         self.user_override_anual_active = tk.BooleanVar(value=False)
         self.user_override_discount_active = tk.BooleanVar(value=False)
-        self.valor_anual_editavel = tk.StringVar(value="0.00") # Representa o TOTAL ANUAL PAGO ADIANTADO
-        self.desconto_personalizado = tk.StringVar(value="10") # Começa com 10% padrão
+        self.valor_anual_editavel = tk.StringVar(value="0,00") # Usar vírgula por padrão
+        self.desconto_personalizado = tk.StringVar(value="0")
 
-        # Armazenar valores calculados
-        self.computed_mensal_sem_fidelidade = 0.0
-        self.computed_mensal_efetivo_anual = 0.0
-        self.computed_anual_total = 0.0
+
+        # Armazenar valores calculados (mantidos)
+        self.computed_mensal = 0.0
+        self.computed_anual = 0.0
         self.computed_desconto_percent = 0.0
-        self.computed_custo_adicional = 0.0
 
-        # --- Layout com Scrollbar ---
+        # Layout com scrollbar (mantido)
         self.canvas = tk.Canvas(self)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar = ttkb.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollbar.pack(side="right", fill="y")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.container = ttkb.Frame(self.canvas)
-        self.canvas_window = self.canvas.create_window((0,0), window=self.container, anchor="nw") # Guardar ref
+        self.canvas.create_window((0,0), window=self.container, anchor="nw")
         self.container.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        # Bind para mouse wheel funcionar no canvas
-        self.canvas.bind_all("<MouseWheel>", lambda e: self._on_mousewheel(e))
-        # Bind para o container também, caso o foco esteja nele
-        self.container.bind("<MouseWheel>", lambda e: self._on_mousewheel(e))
 
         self.frame_main = ttkb.Frame(self.container)
         self.frame_main.pack(fill="both", expand=True)
+
         self.frame_left = ttkb.Frame(self.frame_main)
         self.frame_left.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+
         self.frame_right = ttkb.Frame(self.frame_main)
         self.frame_right.pack(side="left", fill="y", padx=5, pady=5)
-        # --- Fim Layout Scrollbar ---
 
         self._montar_layout_esquerda()
         self._montar_layout_direita()
-        self.configurar_plano("PDV Básico") # Configura o plano inicial
 
-        # Ajustar tamanho inicial do canvas
-        self.container.update_idletasks()
-        self.canvas.config(scrollregion=self.canvas.bbox("all"))
-
-    def _on_mousewheel(self, event):
-        # Determina a direção e magnitude da rolagem
-        # Windows usa event.delta, Linux usa event.num (4 para cima, 5 para baixo)
-        if sys.platform.startswith('win'):
-            delta = int(-1*(event.delta/120))
-        elif sys.platform.startswith('linux') or sys.platform == 'darwin': # Linux e macOS
-            if event.num == 4:
-                delta = -1
-            elif event.num == 5:
-                delta = 1
-            else:
-                delta = 0
-        else: # Plataforma desconhecida, assume padrão Windows
-             delta = int(-1*(event.delta/120))
-
-        self.canvas.yview_scroll(delta, "units")
+        # Configurar plano inicial (deve acontecer depois que os widgets são criados)
+        self.configurar_plano("Plano PDV") # Padrão para o primeiro novo plano
 
 
     def fechar_aba(self):
         if self.on_close_callback:
             self.on_close_callback(self.aba_index)
 
-    def on_bling_selected(self, event=None):
-        selected_bling_plan = self.bling_var.get()
-        if selected_bling_plan in LISTA_PLANOS_BLING:
-            self.configurar_plano(selected_bling_plan)
-        # Não reseta o combobox para manter a seleção visível
-        # self.bling_var.set("Selecionar Bling...")
-
     def _montar_layout_esquerda(self):
-        # Top Bar e Seleção de Planos
+        # Barra superior (mantida)
         top_bar = ttkb.Frame(self.frame_left)
         top_bar.pack(fill="x", pady=5)
         ttkb.Label(top_bar, text=f"Aba Plano {self.aba_index}", font="-size 12 -weight bold").pack(side="left")
-        btn_close = ttkb.Button(top_bar, text="X", command=self.fechar_aba, bootstyle="danger-outline", width=3)
+        btn_close = ttkb.Button(top_bar, text="Fechar Aba", command=self.fechar_aba)
         btn_close.pack(side="right")
 
-        frame_planos = ttkb.Labelframe(self.frame_left, text="Selecionar Plano Base")
+        # Seleção de Plano (nomes de botão atualizados)
+        frame_planos = ttkb.Labelframe(self.frame_left, text="Planos")
         frame_planos.pack(fill="x", pady=5)
-        self.bling_combobox = None
-        plan_buttons_frame = ttkb.Frame(frame_planos) # Frame para botões
-        plan_buttons_frame.pack(fill="x")
-        for i, p in enumerate(LISTA_PLANOS_UI):
-            if p == "Bling":
-                self.bling_var = tk.StringVar(value="Selecionar Bling...")
-                self.bling_combobox = ttk.Combobox(plan_buttons_frame, textvariable=self.bling_var,
-                                                   values=LISTA_PLANOS_BLING, state="readonly", width=25)
-                self.bling_combobox.grid(row=0, column=i, padx=5, pady=5, sticky="ew")
-                self.bling_combobox.bind("<<ComboboxSelected>>", self.on_bling_selected)
-            else:
-                btn = ttkb.Button(plan_buttons_frame, text=p, width=15,
-                                  command=lambda pl=p: self.configurar_plano(pl))
-                btn.grid(row=0, column=i, padx=5, pady=5, sticky="ew") # Usa grid para melhor alinhamento
-            plan_buttons_frame.grid_columnconfigure(i, weight=1) # Faz colunas expansíveis
+        # Usar chaves do PLAN_INFO atualizado
+        for p in PLAN_INFO.keys():
+             ttkb.Button(frame_planos, text=p,
+                         command=lambda pl=p: self.configurar_plano(pl)
+                       ).pack(side="left", padx=5)
+
+        # Seção de Notas Fiscais (Novo layout com checkboxes)
+        frame_notas = ttkb.Labelframe(self.frame_left, text="Notas Fiscais")
+        frame_notas.pack(fill="x", pady=5)
+        f_nf_cols = ttkb.Frame(frame_notas)
+        f_nf_cols.pack(fill="x", padx=5, pady=5)
+
+        notes_modules = sorted(self.notes_vars.keys()) # Ordenar alfabeticamente
+
+        for note_m in notes_modules:
+             var = self.notes_vars[note_m]
+             # Usar IntVar 0/1 e text="0/1" para refletir a seleção
+             cb = ttk.Checkbutton(f_nf_cols, text=note_m, variable=var)
+             cb.pack(anchor="w", pady=1)
+             self.notes_checkbuttons[note_m] = cb
+             # Ligar comando APÓS criar todos os botões para garantir a lógica de exclusividade
+             cb.config(command=lambda m=note_m: self.handle_notes_exclusivity(m))
 
 
-        # Módulos Opcionais (Checkboxes)
-        frame_mod = ttkb.Labelframe(self.frame_left, text="Módulos Opcionais (Marque para adicionar)")
+        # Módulos Dinâmicos (Layout Checkbox + Spinbox)
+        frame_mod = ttkb.Labelframe(self.frame_left, text="Outros Módulos")
         frame_mod.pack(fill="both", expand=True, pady=5)
-        f_mod_cols = ttkb.Frame(frame_mod)
-        f_mod_cols.pack(fill="both", expand=True)
+        f_mod_grid = ttkb.Frame(frame_mod)
+        f_mod_grid.pack(fill="both", expand=True, padx=5, pady=5)
 
-        f_mod_left = ttkb.Frame(f_mod_cols)
-        f_mod_left.pack(side="left", fill="both", expand=True, padx=5)
-        f_mod_right = ttkb.Frame(f_mod_cols)
-        f_mod_right.pack(side="left", fill="both", expand=True, padx=5)
+        # Criar Checkbox e Spinbox para cada módulo quantificável
+        num_columns = 2 # Ou 3, dependendo do espaço
+        col_widgets = [[] for _ in range(num_columns)] # Lista de listas para armazenar widgets por coluna
 
-        # Lista de módulos que podem aparecer como checkbox na UI
-        displayable_mods_ui = sorted([
-            m for m, var in self.modules.items() if m not in [
-                "PDV - Frente de Caixa", "Usuários", "Smart TEF", # Controlados por spinbox
-                "Terminais Autoatendimento", # Controlado por spinbox
-                "Relatórios", "Relatório Básico", # Mandatórios implícitos ou genéricos
-                "30 Notas Fiscais", "Notas Fiscais Ilimitadas", # Ligados a planos
-                "Suporte Técnico - Via chamados", # Mandatório base
-                # Adicionar outros mandatórios que não devem aparecer como checkbox opcional
-                "Estoque em Grade", "Importação de XML", "Produção",
-                "Contratos de cartões e outros", "Painel Senha TV", "Delivery", "Relatório KDS"
-            ]
-        ])
+        for i, module_name in enumerate(sorted(self.quantifiable_modules)): # Ordenar para ordem consistente
+            mod_frame = ttkb.Frame(f_mod_grid)
 
-        mid = len(displayable_mods_ui)//2
-        left_side = displayable_mods_ui[:mid]
-        right_side = displayable_mods_ui[mid:]
-        self.check_buttons = {} # Limpa para garantir que só os criados agora estarão lá
+            # Label do Nome do Módulo
+            ttkb.Label(mod_frame, text=module_name).pack(side="left", padx=(0, 5))
 
-        for m in left_side:
-             if m in self.modules: # Confirma que o módulo existe no dicionário principal
-                 cb = ttk.Checkbutton(f_mod_left, text=m, variable=self.modules[m], command=self.atualizar_valores)
-                 cb.pack(anchor="w", pady=2)
-                 self.check_buttons[m] = cb # Armazena o widget
+            # Checkbox (reflete spinbox > 0, permite alternar)
+            # Usar uma variável booleana separada para o estado do checkbox
+            check_var = tk.BooleanVar(value=False)
+            cb = ttk.Checkbutton(mod_frame, variable=check_var)
+            cb.pack(side="left")
 
-        for m in right_side:
-             if m in self.modules:
-                 cb = ttk.Checkbutton(f_mod_right, text=m, variable=self.modules[m], command=self.atualizar_valores)
-                 cb.pack(anchor="w", pady=2)
-                 self.check_buttons[m] = cb
+            # Spinbox (controla a quantidade)
+            spin_var = self.module_quantities[module_name]
+            sp = ttkb.Spinbox(mod_frame, from_=0, to=999, textvariable=spin_var, width=5) # Quantidade máxima 999? Ajustar se necessário
+            sp.pack(side="left", padx=(5, 0))
 
-        # Frame Dados Cliente e Plano
-        frame_dados = ttkb.Labelframe(self.frame_left, text="Dados do Cliente e Proposta")
+            # Armazenar widgets e ligar checkbox/spinbox
+            self.module_widgets[module_name] = {'check': cb, 'spin': sp, 'check_var': check_var, 'spin_var': spin_var, 'frame': mod_frame}
+
+            # Ligar a mudança do spinbox para atualizar o checkbox e os valores gerais
+            spin_var.trace_add("write", lambda name, index, mode, m=module_name: self.on_module_quantity_change(m))
+            # Ligar o clique do checkbox para atualizar o spinbox e os valores gerais
+            # Usar trace 'write' na variável booleana
+            check_var.trace_add("write", lambda name, index, mode, m=module_name: self.on_module_check_change(m))
+
+            # Adicionar à lista da coluna apropriada
+            col_widgets[i % num_columns].append(mod_frame)
+
+        # Posicionar os frames das colunas no frame da grade
+        for col_idx in range(num_columns):
+             col_frame = ttkb.Frame(f_mod_grid)
+             col_frame.grid(row=0, column=col_idx, sticky="nsew", padx=5, pady=5)
+             f_mod_grid.columnconfigure(col_idx, weight=1)
+             for r, mod_frame in enumerate(col_widgets[col_idx]):
+                 mod_frame.pack(anchor="w", pady=1) # Empacotar dentro do frame da coluna
+
+
+        # Seção de Entrada de Dados (mantida)
+        frame_dados = ttkb.Labelframe(self.frame_left, text="Dados do Cliente")
         frame_dados.pack(fill="x", pady=5)
-        ttkb.Label(frame_dados, text="Nome do Cliente:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        ttkb.Entry(frame_dados, textvariable=self.nome_cliente_var, width=30).grid(row=0, column=1, padx=5, pady=2)
-        ttkb.Label(frame_dados, text="Validade Proposta:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        ttkb.Entry(frame_dados, textvariable=self.validade_proposta_var, width=15).grid(row=1, column=1, padx=5, pady=2, sticky="w")
-        ttkb.Label(frame_dados, text="Nome do Plano (Opcional):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        ttkb.Entry(frame_dados, textvariable=self.nome_plano_var, width=30).grid(row=2, column=1, padx=5, pady=2)
+        ttkb.Label(frame_dados, text="Nome do Cliente:").grid(row=0, column=0, sticky="w")
+        ttkb.Entry(frame_dados, textvariable=self.nome_cliente_var).grid(row=0, column=1, padx=5, pady=2)
+        ttkb.Label(frame_dados, text="Validade Proposta:").grid(row=1, column=0, sticky="w")
+        ttkb.Entry(frame_dados, textvariable=self.validade_proposta_var).grid(row=1, column=1, padx=5, pady=2)
+
+        ttkb.Label(frame_dados, text="Nome do Plano:").grid(row=2, column=0, sticky="w")
+        ttkb.Entry(frame_dados, textvariable=self.nome_plano_var).grid(row=2, column=1, padx=5, pady=2)
 
 
     def _montar_layout_direita(self):
-        # Quantidades (PDV, Usuários, Smart TEF, Terminais AA)
-        frame_inc = ttkb.Labelframe(self.frame_right, text="Quantidades")
+        # Seção de Incrementos (Atualizar labels se necessário, manter estrutura)
+        frame_inc = ttkb.Labelframe(self.frame_right, text="Incrementos")
         frame_inc.pack(fill="x", pady=5)
 
-        ttkb.Label(frame_inc, text="PDVs - Frente de Caixa").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.sp_pdv = ttkb.Spinbox(frame_inc, from_=0, to=99, textvariable=self.spin_pdv_var, width=5, command=self.atualizar_valores)
-        self.sp_pdv.grid(row=0, column=1, padx=5, pady=2)
+        # PDVs (mantido)
+        ttkb.Label(frame_inc, text="PDVs").grid(row=0, column=0, sticky="w")
+        sp_pdv = ttkb.Spinbox(frame_inc, from_=0, to=99,
+                              textvariable=self.spin_pdv_var,
+                              command=self.atualizar_valores)
+        sp_pdv.grid(row=0, column=1, padx=5, pady=2)
 
-        ttkb.Label(frame_inc, text="Usuários").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.sp_usr = ttkb.Spinbox(frame_inc, from_=0, to=999, textvariable=self.spin_users_var, width=5, command=self.atualizar_valores)
-        self.sp_usr.grid(row=1, column=1, padx=5, pady=2)
+        # Usuários (mantido)
+        ttkb.Label(frame_inc, text="Usuários").grid(row=1, column=0, sticky="w")
+        sp_usr = ttkb.Spinbox(frame_inc, from_=0, to=999,
+                              textvariable=self.spin_users_var,
+                              command=self.atualizar_valores)
+        sp_usr.grid(row=1, column=1, padx=5, pady=2)
 
-        ttkb.Label(frame_inc, text="Smart TEF").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        self.sp_smf = ttkb.Spinbox(frame_inc, from_=0, to=99, textvariable=self.spin_smart_tef_var, width=5, command=self.atualizar_valores)
-        self.sp_smf.grid(row=2, column=1, padx=5, pady=2)
+        # Terminais Autoatendimento (Label e nome da variável atualizados)
+        ttkb.Label(frame_inc, text="Terminais Autoatendimento").grid(row=2, column=0, sticky="w")
+        sp_at = ttkb.Spinbox(frame_inc, from_=0, to=999,
+                             textvariable=self.spin_terminais_auto_var,
+                             command=self.atualizar_valores)
+        sp_at.grid(row=2, column=1, padx=5, pady=2)
 
-        ttkb.Label(frame_inc, text="Terminais Autoatendimento").grid(row=3, column=0, sticky="w", padx=5, pady=2)
-        self.sp_taa = ttkb.Spinbox(frame_inc, from_=0, to=99, textvariable=self.spin_terminais_aa_var, width=5, command=self.atualizar_valores)
-        self.sp_taa.grid(row=3, column=1, padx=5, pady=2)
+        # Cardápio Digital (mantido)
+        ttkb.Label(frame_inc, text="Cardápio Digital").grid(row=3, column=0, sticky="w")
+        sp_cd = ttkb.Spinbox(frame_inc, from_=0, to=999,
+                             textvariable=self.spin_cardapio_var,
+                             command=self.atualizar_valores)
+        sp_cd.grid(row=3, column=1, padx=5, pady=2)
 
+        # TEF (mantido)
+        ttkb.Label(frame_inc, text="TEF").grid(row=4, column=0, sticky="w")
+        sp_tef = ttkb.Spinbox(frame_inc, from_=0, to=99,
+                              textvariable=self.spin_tef_var,
+                              command=self.atualizar_valores)
+        sp_tef.grid(row=4, column=1, padx=5, pady=2)
 
-        # --- Frame Valores Finais (Layout Atualizado) ---
-        frame_valores = ttkb.Labelframe(self.frame_right, text="Valores da Proposta")
-        frame_valores.pack(fill="both", pady=5, expand=True) # Expandir para preencher espaço
+        # Smart TEF (mantido)
+        ttkb.Label(frame_inc, text="Smart TEF").grid(row=5, column=0, sticky="w")
+        sp_smf = ttkb.Spinbox(frame_inc, from_=0, to=99,
+                              textvariable=self.spin_smart_tef_var,
+                              command=self.atualizar_valores)
+        sp_smf.grid(row=5, column=1, padx=5, pady=2)
 
-        # 1. Mensal (Sem Fidelidade)
-        self.lbl_plano_mensal_sem_fid = ttkb.Label(frame_valores, text="Mensal (Sem Fidelidade): R$ 0,00", font="-size 11")
-        self.lbl_plano_mensal_sem_fid.pack(pady=(5, 2), anchor="w", padx=5)
+        # App Gestão CPlug (mantido)
+        ttkb.Label(frame_inc, text="App Gestão CPlug").grid(row=6, column=0, sticky="w")
+        sp_app = ttkb.Spinbox(frame_inc, from_=0, to=999,
+                              textvariable=self.spin_app_cplug_var,
+                              command=self.atualizar_valores)
+        sp_app.grid(row=6, column=1, padx=5, pady=2)
 
-        # 2. Custo Treinamento/Implementação (Associado ao mensal sem fidelidade)
-        self.lbl_treinamento = ttkb.Label(frame_valores, text="+ Custo Treinamento: R$ 0,00", font="-size 9")
-        self.lbl_treinamento.pack(pady=(0, 5), anchor="w", padx=15) # Indentado
+        # Delivery Direto Básico (mantido)
+        ttkb.Label(frame_inc, text="Delivery Direto Básico").grid(row=7, column=0, sticky="w")
+        sp_ddb = ttkb.Spinbox(frame_inc, from_=0, to=999,
+                              textvariable=self.spin_delivery_direto_basico_var,
+                              command=self.atualizar_valores)
+        sp_ddb.grid(row=7, column=1, padx=5, pady=2)
 
-        # 3. Mensal (No Plano Anual)
-        self.lbl_plano_mensal_no_anual = ttkb.Label(frame_valores, text="Mensal (no Plano Anual): R$ 0,00", font="-size 12 -weight bold")
-        self.lbl_plano_mensal_no_anual.pack(pady=5, anchor="w", padx=5)
+        # Valores Finais e Overrides (mantidos)
+        frame_valores = ttkb.Labelframe(self.frame_right, text="Valores Finais")
+        frame_valores.pack(fill="x", pady=5)
 
-        # 4. Anual (Pagamento Único)
-        self.lbl_plano_anual_total = ttkb.Label(frame_valores, text="Anual (Pagamento Único): R$ 0,00", font="-size 12 -weight bold")
-        self.lbl_plano_anual_total.pack(pady=5, anchor="w", padx=5)
+        self.lbl_plano_mensal = ttkb.Label(frame_valores, text="Plano (Mensal): R$ 0,00", font="-size 12 -weight bold")
+        self.lbl_plano_mensal.pack()
+        self.lbl_plano_anual = ttkb.Label(frame_valores, text="Plano (Anual): R$ 0,00", font="-size 12 -weight bold")
+        self.lbl_plano_anual.pack()
+        self.lbl_treinamento = ttkb.Label(frame_valores, text="Custo Treinamento (Mensal): R$ 0,00", font="-size 12 -weight bold")
+        self.lbl_treinamento.pack()
+        self.lbl_desconto = ttkb.Label(frame_valores, text="Desconto: 0%", font="-size 12 -weight bold")
+        self.lbl_desconto.pack()
 
-        # 5. Desconto Aplicado (Informativo)
-        self.lbl_desconto = ttkb.Label(frame_valores, text="Desconto Anual Aplicado: 10%", font="-size 9")
-        self.lbl_desconto.pack(pady=(5, 10), anchor="w", padx=5)
-
-        # Separador
-        ttk.Separator(frame_valores, orient='horizontal').pack(fill='x', pady=5, padx=5)
-
-        # --- Frames de Edição Manual ---
-        frame_edicao = ttkb.Frame(frame_valores)
-        frame_edicao.pack(fill="x", pady=5)
-
-        # 6. Edição Anual Total
-        frame_edit_anual = ttkb.Labelframe(frame_edicao, text="Editar Anual Total (R$)")
-        frame_edit_anual.pack(side="left", padx=5, fill="x", expand=True)
+        frame_edit_anual = ttkb.Labelframe(self.frame_right, text="Plano (Anual) (editável)")
+        frame_edit_anual.pack(pady=5, fill="x")
         e_anual = ttkb.Entry(frame_edit_anual, textvariable=self.valor_anual_editavel, width=10)
-        e_anual.pack(side="left", padx=5, pady=2)
+        e_anual.pack(side="left", padx=5)
         e_anual.bind("<KeyRelease>", self.on_user_edit_valor_anual)
-        b_reset_anual = ttkb.Button(frame_edit_anual, text="Reset", command=self.on_reset_anual, width=5, bootstyle="warning-outline")
-        b_reset_anual.pack(side="left", padx=5, pady=2)
+        b_reset_anual = ttkb.Button(frame_edit_anual, text="Reset Anual", command=self.on_reset_anual)
+        b_reset_anual.pack(side="left", padx=5)
 
-        # 7. Edição Desconto %
-        frame_edit_desc = ttkb.Labelframe(frame_edicao, text="Editar Desconto (%)")
-        frame_edit_desc.pack(side="left", padx=5, fill="x", expand=True)
-        e_desc = ttkb.Entry(frame_edit_desc, textvariable=self.desconto_personalizado, width=5)
-        e_desc.pack(side="left", padx=5, pady=2)
+        frame_edit_desc = ttkb.Labelframe(self.frame_right, text="Desconto (%) (editável)")
+        frame_edit_desc.pack(pady=5, fill="x")
+        e_desc = ttkb.Entry(frame_edit_desc, textvariable=self.desconto_personalizado, width=10)
+        e_desc.pack(side="left", padx=5)
         e_desc.bind("<KeyRelease>", self.on_user_edit_desconto)
-        b_reset_desc = ttkb.Button(frame_edit_desc, text="Reset", command=self.on_reset_desconto, width=5, bootstyle="warning-outline")
-        b_reset_desc.pack(side="left", padx=5, pady=2)
+        b_reset_desc = ttkb.Button(frame_edit_desc, text="Reset Desconto", command=self.on_reset_desconto)
+        b_reset_desc.pack(side="left", padx=5)
 
-
-    # --- Funções de Edição/Reset ---
+    # Handlers para overrides (mantidos)
     def on_user_edit_valor_anual(self, *args):
-        # Usuário editou o VALOR TOTAL ANUAL
         self.user_override_anual_active.set(True)
-        self.user_override_discount_active.set(False) # Desativa override de desconto
-        self.atualizar_valores() # Recalcula tudo e atualiza UI
+        self.user_override_discount_active.set(False)
+        self.atualizar_valores()
 
     def on_reset_anual(self):
         self.user_override_anual_active.set(False)
-        # Não reseta valor_anual_editavel aqui, deixa atualizar_valores recalcular
+        self.valor_anual_editavel.set("0,00")
         self.atualizar_valores()
 
     def on_user_edit_desconto(self, *args):
-        # Usuário editou o PERCENTUAL DE DESCONTO
         self.user_override_discount_active.set(True)
-        self.user_override_anual_active.set(False) # Desativa override de valor anual
-        self.atualizar_valores() # Recalcula tudo e atualiza UI
+        self.user_override_anual_active.set(False)
+        self.desconto_personalizado.set("0")
+        self.atualizar_valores()
 
     def on_reset_desconto(self):
         self.user_override_discount_active.set(False)
-        # Não reseta desconto_personalizado aqui, deixa atualizar_valores recalcular (para 10% ou calculado)
+        self.desconto_personalizado.set("0")
         self.atualizar_valores()
 
-    def configurar_plano(self, plano):
-        # Reset Bling Combobox se outro plano for selecionado
-        if not plano.startswith("Bling -") and hasattr(self, 'bling_combobox') and self.bling_combobox:
-             self.bling_var.set("Selecionar Bling...")
-
-        if plano not in PLAN_INFO:
-             showerror("Erro de Configuração", f"Plano '{plano}' não encontrado nas definições.")
+    # Novos handlers para interação checkbox/spinbox de módulos dinâmicos
+    def on_module_quantity_change(self, module_name):
+        """Atualiza o estado do checkbox quando o valor do spinbox muda e dispara recálculo."""
+        widgets = self.module_widgets.get(module_name)
+        if not widgets:
              return
+        spin_var = widgets['spin_var']
+        check_var = widgets['check_var']
+        qty = spin_var.get()
 
-        info = PLAN_INFO[plano]
+        # Atualizar estado do checkbox baseado na quantidade
+        check_var.set(qty > 0)
+
+        self.atualizar_valores()
+
+    def on_module_check_change(self, module_name):
+        """Atualiza o valor do spinbox quando o estado do checkbox muda e dispara recálculo."""
+        widgets = self.module_widgets.get(module_name)
+        if not widgets:
+             return
+        spin_var = widgets['spin_var']
+        check_var = widgets['check_var']
+        is_checked = check_var.get()
+
+        # Obter a quantidade atual sem disparar o trace novamente
+        # Remover temporariamente o trace, definir o valor, readicionar o trace
+        trace_id = spin_var.trace_add("write", lambda name, index, mode, m=module_name: self.on_module_quantity_change(m))
+
+        if is_checked and spin_var.get() == 0:
+            # Se marcado e quantidade é 0, definir para 1 (ou mínimo permitido se diferente)
+            spin_var.set(1)
+        elif not is_checked and spin_var.get() > 0:
+            # Se desmarcado e quantidade é > 0, definir para 0
+            spin_var.set(0)
+        # Se marcado e quantidade > 0, ou desmarcado e quantidade 0, não fazer nada no valor do spinbox
+
+        spin_var.trace_remove("write", trace_id) # Remover o trace temporário
+        self.atualizar_valores()
+
+
+    # Novo handler para exclusividade de Notas Fiscais
+    def handle_notes_exclusivity(self, selected_module):
+        """Garante que apenas uma opção de Notas Fiscais seja selecionada por vez."""
+        selected_var = self.notes_vars[selected_module]
+        if selected_var.get() == 1: # Se a opção selecionada foi marcada
+            for module_name, var in self.notes_vars.items():
+                if module_name != selected_module and var.get() == 1:
+                    var.set(0) # Desmarcar as outras
+
+        self.atualizar_valores() # Sempre atualizar valores após uma mudança
+
+    def configurar_plano(self, plano):
+        info = PLAN_INFO.get(plano, {}) # Usar .get() para segurança
         self.current_plan = plano
-        print(f"Configurando para o plano: {plano}")
+        self.nome_plano_var.set(plano) # Definir a label/entrada do nome do plano
 
-        # --- Configurar Spinboxes (Mínimos e Máximos) ---
-        min_pdv = info.get("min_pdv", 0); max_pdv = info.get("min_pdv", 0) + info.get("max_extra_pdvs", 99)
-        min_users = info.get("min_users", 0); max_users = info.get("min_users", 0) + info.get("max_extra_users", 999)
-
-        self.spin_pdv_var.set(min_pdv)
-        self.sp_pdv.config(from_=min_pdv, to=max_pdv if max_pdv >= min_pdv else min_pdv) # Garante to >= from
-        self.sp_pdv.config(state='normal' if max_pdv > min_pdv else 'readonly') # Readonly se não pode adicionar
-
-        self.spin_users_var.set(min_users)
-        self.sp_usr.config(from_=min_users, to=max_users if max_users >= min_users else min_users)
-        self.sp_usr.config(state='normal' if max_users > min_users else 'readonly')
-
-        # Limite Smart TEF no Gestão (e incluído no Performance)
-        min_smart_tef = 0; max_smart_tef = 99 # Padrão
-        val_inicial_smart_tef = 0
-        state_smart_tef = 'normal'
-        if plano == "Gestão":
-             max_smart_tef = 3 # Permite adicionar até 3
-        elif plano == "Performance":
-             min_smart_tef = 3 # Performance já inclui 3
-             max_smart_tef = 3 # Não permite adicionar mais pelo spinbox
-             val_inicial_smart_tef = 3
-             state_smart_tef = 'readonly'
-        elif "Smart TEF" not in info.get("allowed_optionals", []) and "Smart TEF" not in info.get("mandatory", []):
-             max_smart_tef = 0 # Não permitido neste plano
-             state_smart_tef = 'disabled'
+        # Resetar spinboxes dedicadas com base nos mínimos do plano
+        self.spin_pdv_var.set(info.get("min_pdv", 0))
+        self.spin_users_var.set(info.get("min_users", 0))
+        # Resetar outras spinboxes dedicadas para 0
+        self.spin_terminais_auto_var.set(0)
+        self.spin_cardapio_var.set(0)
+        self.spin_tef_var.set(0)
+        self.spin_smart_tef_var.set(0)
+        self.spin_app_cplug_var.set(0)
+        self.spin_delivery_direto_basico_var.set(0)
 
 
-        self.spin_smart_tef_var.set(val_inicial_smart_tef)
-        self.sp_smf.config(from_=min_smart_tef, to=max_smart_tef if max_smart_tef >= min_smart_tef else min_smart_tef)
-        self.sp_smf.config(state=state_smart_tef)
-
-        # Configurar Terminais de Autoatendimento
-        min_taa = 0; max_taa = 99
-        val_inicial_taa = 0
-        state_taa = 'normal'
-        if plano == "Autoatendimento":
-            min_taa = 1 # Plano Autoatendimento começa com 1
-            val_inicial_taa = 1
-        elif "Terminais Autoatendimento" not in info.get("allowed_optionals", []) and "Terminais Autoatendimento" not in info.get("mandatory", []):
-             max_taa = 0 # Não permitido
-             state_taa = 'disabled'
-
-        self.spin_terminais_aa_var.set(val_inicial_taa)
-        self.sp_taa.config(from_=min_taa, to=max_taa if max_taa >= min_taa else min_taa)
-        self.sp_taa.config(state=state_taa)
-
-
-        # --- Resetar/Configurar Módulos (Checkboxes) ---
-        # 1. Limpa todos os checkboxes e reseta estado para habilitado
-        for m, var in self.modules.items():
+        # Resetar checkboxes de Notas Fiscais para 0 e habilitá-los
+        for var in self.notes_vars.values():
             var.set(0)
-            if m in self.check_buttons:
-                self.check_buttons[m].config(state='normal') # Habilita todos por padrão
+        for cb in self.notes_checkbuttons.values():
+             cb.config(state='normal') # Habilitar todos inicialmente
 
-        # 2. Define os mandatórios e desabilita seus checkboxes
-        mandatory = info.get("mandatory", [])
-        for m in mandatory:
-            if m in self.modules:
-                self.modules[m].set(1) # Marca como selecionado
-                if m in self.check_buttons:
-                    self.check_buttons[m].config(state='disabled') # Desabilita o checkbox
+        # Resetar quantidades de módulos dinâmicos para 0 e habilitar widgets
+        for module_name in self.quantifiable_modules:
+            self.module_quantities[module_name].set(0)
+            widgets = self.module_widgets.get(module_name)
+            if widgets:
+                widgets['check'].config(state='normal')
+                widgets['spin'].config(state='normal')
 
-        # 3. Desabilita checkboxes que NÃO são opcionais permitidos para este plano
-        allowed = info.get("allowed_optionals", [])
-        implicitly_allowed = set(mandatory) # Mandatórios são "permitidos" mas controlados
-        spinbox_controlled = {"PDV - Frente de Caixa", "Usuários", "Smart TEF", "Terminais Autoatendimento"}
 
-        for m, cb in self.check_buttons.items():
-            is_allowed = m in allowed
-            is_mandatory = m in implicitly_allowed
-            is_spinbox = m in spinbox_controlled
+        # Definir módulos obrigatórios com base nas informações do novo plano
+        mandatory_list = info.get("mandatory", [])
 
-            if is_mandatory or is_spinbox:
-                cb.config(state='disabled') # Desabilita se for mandatório ou controlado por spinbox
-                # O valor (set(1)) é controlado pela lógica do spinbox ou mandatório
-            elif not is_allowed:
-                 # Se não está na lista de opcionais permitidos NEM é mandatório/spinbox
-                 cb.config(state='disabled')
-                 self.modules[m].set(0) # Garante que não fique marcado se não for permitido
-            else:
-                 # Se chegou aqui, é um opcional permitido e não mandatório/spinbox
-                 cb.config(state='normal') # Garante que esteja habilitado
+        # Lidar com Notas Fiscais obrigatórias
+        for oblig in mandatory_list:
+            if oblig in self.notes_vars:
+                self.notes_vars[oblig].set(1)
+                if oblig in self.notes_checkbuttons:
+                    self.notes_checkbuttons[oblig].config(state='disabled') # Desabilitar o checkbox
 
-        # --- Resetar overrides e recalcular ---
+        # Lidar com módulos dinâmicos obrigatórios (definir quantidade para 1 e desabilitar widgets)
+        for oblig in mandatory_list:
+             if oblig in self.module_quantities:
+                 # Para módulos obrigatórios, definir a quantidade mínima como 1
+                 self.module_quantities[oblig].set(1)
+                 widgets = self.module_widgets.get(oblig)
+                 if widgets:
+                     # Checkbox já deve refletir a quantidade > 0 devido ao trace
+                     widgets['check'].config(state='disabled')
+                     widgets['spin'].config(state='disabled')
+
+        # Não é necessário lidar com o plano Autoatendimento de forma especial aqui com base na nova estrutura
+
         self.user_override_anual_active.set(False)
         self.user_override_discount_active.set(False)
-        # Definir o desconto padrão como 10 ao configurar o plano
-        self.desconto_personalizado.set("10")
-        self.atualizar_valores() # Dispara o recálculo inicial
+        self.valor_anual_editavel.set("0,00")
+        self.desconto_personalizado.set("0")
 
-    def _calcular_extras(self):
-        """Calcula o custo MENSAL total dos extras e separa por descontável/não descontável."""
-        total_extras_cost = 0.0
-        total_extras_descontavel = 0.0
-        total_extras_nao_descontavel = 0.0
-        info = PLAN_INFO.get(self.current_plan, {}) # Pega info do plano atual
-        if not info: return 0.0, 0.0, 0.0 # Retorna zero se plano inválido
-
-        mandatory = info.get("mandatory", [])
-        base_mensal_efetivo = info.get("base_mensal", 0.0) # Custo base efetivo anual do plano
-
-        # --- 1. Itens controlados por Spinbox ---
-
-        # PDVs Extras
-        pdv_atuais = self.spin_pdv_var.get()
-        pdv_incluidos = info.get("min_pdv", 0)
-        pdv_extras = max(0, pdv_atuais - pdv_incluidos)
-        if pdv_extras > 0:
-            pdv_price = 0.0
-            if self.current_plan in ["Gestão", "Performance"]: pdv_price = PRECO_EXTRA_PDV_GESTAO_PERFORMANCE
-            elif self.current_plan.startswith("Bling"): pdv_price = PRECO_EXTRA_PDV_BLING
-            elif self.current_plan == "Em Branco": pdv_price = PRECO_EXTRA_PDV_GESTAO_PERFORMANCE # Default para Em Branco
-            # PDV Básico não permite extra (max_extra_pdvs: 0)
-
-            if pdv_price > 0: # Apenas adiciona custo se houver preço definido
-                cost_pdv_extra = pdv_extras * pdv_price
-                total_extras_cost += cost_pdv_extra
-                if "PDV Extra" not in SEM_DESCONTO: total_extras_descontavel += cost_pdv_extra
-                else: total_extras_nao_descontavel += cost_pdv_extra
-
-        # Users Extras
-        users_atuais = self.spin_users_var.get()
-        users_incluidos = info.get("min_users", 0)
-        users_extras = max(0, users_atuais - users_incluidos)
-        if users_extras > 0:
-            cost_users_extra = users_extras * PRECO_EXTRA_USUARIO
-            total_extras_cost += cost_users_extra
-            if "User Extra" not in SEM_DESCONTO: total_extras_descontavel += cost_users_extra
-            else: total_extras_nao_descontavel += cost_users_extra
-
-        # Smart TEF Extras (Apenas no Gestão)
-        if self.current_plan == "Gestão":
-            smart_tef_atuais = self.spin_smart_tef_var.get()
-            smart_tef_incluidos = 0 # Gestão não inclui nenhum fixo
-            smart_tef_extras = max(0, smart_tef_atuais - smart_tef_incluidos)
-            if smart_tef_extras > 0:
-                price = smart_tef_extras * precos_mensais.get("Smart TEF", 0.0)
-                total_extras_cost += price
-                if "Smart TEF" not in SEM_DESCONTO: total_extras_descontavel += price
-                else: total_extras_nao_descontavel += price
-
-        # Terminais Autoatendimento Extras
-        taa_atuais = self.spin_terminais_aa_var.get()
-        # TAA é incluído no plano Autoatendimento (1 unidade)
-        taa_incluidos = 1 if self.current_plan == "Autoatendimento" else 0
-        taa_extras = max(0, taa_atuais - taa_incluidos)
-        if taa_extras > 0:
-            # Preço por terminal extra
-            price_per_taa_extra = precos_mensais.get("Terminais Autoatendimento", 199.00)
-            cost_taa_extra = taa_extras * price_per_taa_extra
-            total_extras_cost += cost_taa_extra
-            # Terminais AA estão em SEM_DESCONTO
-            total_extras_nao_descontavel += cost_taa_extra
-
-        # --- 2. Módulos Extras (Checkboxes Opcionais Selecionados) ---
-        for m, var_m in self.modules.items():
-             # Considera apenas os checkboxes VISÍVEIS na UI e que estão MARCADOS
-             if m in self.check_buttons and var_m.get() == 1:
-                 # Verifica se NÃO é um módulo mandatório para ESTE plano
-                 # E se NÃO é um módulo já tratado pelos spinboxes (redundante checar, mas seguro)
-                 if m not in mandatory and m not in ["PDV - Frente de Caixa", "Usuários", "Smart TEF", "Terminais Autoatendimento"]:
-                     price = precos_mensais.get(m, 0.0)
-                     if price > 0: # Adiciona apenas se tiver preço definido
-                         total_extras_cost += price
-                         if m not in SEM_DESCONTO: total_extras_descontavel += price
-                         else: total_extras_nao_descontavel += price
-
-        # Retorna: Custo total mensal só dos extras, parte descontável, parte não descontável
-        return total_extras_cost, total_extras_descontavel, total_extras_nao_descontavel
+        # Chamar atualizar_valores no final para atualizar cálculos e estado da UI
+        self.atualizar_valores()
 
     def atualizar_valores(self, *args):
-        if not hasattr(self, 'current_plan') or not self.current_plan or self.current_plan not in PLAN_INFO:
-            # print("Aviso: Plano atual não definido ou inválido durante atualização de valores.")
-            return # Sai se o plano não estiver configurado ainda
-
-        info = PLAN_INFO[self.current_plan]
-        is_bling_plan = self.current_plan.startswith("Bling -")
-        is_autoatendimento_plano = self.current_plan == "Autoatendimento"
-        is_em_branco_plano = self.current_plan == "Em Branco"
-
-        # --- Obter Custos Base e Extras ---
-        base_mensal_efetivo_anual = info.get("base_mensal", 0.0)
-        total_extras_cost, total_extras_descontavel, total_extras_nao_descontavel = self._calcular_extras()
-
-        # --- Calcular Valores Principais ---
-        base_mensal_sem_fidelidade = (base_mensal_efetivo_anual / 0.90) if base_mensal_efetivo_anual > 0.01 else 0.0
-        total_mensal_sem_fidelidade = base_mensal_sem_fidelidade + total_extras_cost
-        total_mensal_efetivo_anual_base_calc = base_mensal_efetivo_anual + total_extras_cost
-
-        # --- Aplicar Overrides ---
-        final_mensal_efetivo_anual = 0.0
-        final_anual_total = 0.0
-        desconto_aplicado_percent = 10.0 # Default
-
         try:
-            if self.user_override_anual_active.get():
-                edited_total_anual = float(self.valor_anual_editavel.get().replace(",", "."))
-                if edited_total_anual < 0: edited_total_anual = 0
-                final_anual_total = edited_total_anual
-                final_mensal_efetivo_anual = final_anual_total / 12.0
-                if total_mensal_sem_fidelidade > 0.01:
-                    desconto_calc = ((total_mensal_sem_fidelidade - final_mensal_efetivo_anual) / total_mensal_sem_fidelidade) * 100
-                    desconto_aplicado_percent = max(0, desconto_calc)
+            info = PLAN_INFO.get(self.current_plan, {}) # Usar .get() para segurança
+        except KeyError: # Não deveria acontecer com .get(), mas por precaução
+            return
+
+        base_mensal = info.get("base_mensal", 0.0)
+        mandatory = info.get("mandatory", []) # Usar get com default
+
+        # Começar com o base do plano
+        parte_descontavel = base_mensal
+        parte_sem_desc = 0.0
+
+        # Custo de PDVs e Usuários EXTRAS (assumindo que o custo da contagem base está no base_mensal)
+        # PDVs
+        min_pdv = info.get("min_pdv", 0)
+        selected_pdv = self.spin_pdv_var.get()
+        pdv_extras = max(0, selected_pdv - min_pdv)
+        # Usar 59.90 como preço extra por PDV com base no preço antigo "outros" e contexto da nova lista
+        parte_descontavel += pdv_extras * 59.90
+
+        # Usuários
+        min_users = info.get("min_users", 0)
+        selected_users = self.spin_users_var.get()
+        user_extras = max(0, selected_users - min_users)
+        # Usar 19.00 como preço extra por Usuário com base na nova lista
+        parte_descontavel += user_extras * 19.00
+
+        # Custo de módulos de spinbox dedicadas (quantidade total * preço)
+        # Precisa usar os nomes corretos dos módulos como chaves para precos_mensais
+        dedicated_spinbox_costs = {
+            "Terminais Autoatendimento": {"qty": self.spin_terminais_auto_var.get(), "price": precos_mensais.get("Terminais Autoatendimento", 0.0), "sem_desconto": "Terminais Autoatendimento" in SEM_DESCONTO},
+            "Cardápio digital": {"qty": self.spin_cardapio_var.get(), "price": precos_mensais.get("Cardápio digital", 0.0), "sem_desconto": "Cardápio digital" in SEM_DESCONTO},
+            "TEF": {"qty": self.spin_tef_var.get(), "price": precos_mensais.get("TEF", 0.0), "sem_desconto": "TEF" in SEM_DESCONTO},
+            "Smart TEF": {"qty": self.spin_smart_tef_var.get(), "price": precos_mensais.get("Smart TEF", 0.0), "sem_desconto": "Smart TEF" in SEM_DESCONTO},
+            "App Gestão CPlug": {"qty": self.spin_app_cplug_var.get(), "price": precos_mensais.get("App Gestão CPlug", 0.0), "sem_desconto": "App Gestão CPlug" in SEM_DESCONTO},
+            "Delivery Direto Básico": {"qty": self.spin_delivery_direto_basico_var.get(), "price": precos_mensais.get("Delivery Direto Básico", 0.0), "sem_desconto": "Delivery Direto Básico" in SEM_DESCONTO},
+        }
+
+        for module_name, data in dedicated_spinbox_costs.items():
+             qty = data["qty"]
+             price = data["price"]
+             is_sem_desconto = data["sem_desconto"]
+
+             # Lidar com módulos de spinbox dedicadas obrigatórios (como Smart TEF no Performance)
+             # Assumir que o base_mensal cobre a *funcionalidade*. O custo se aplica às unidades totais selecionadas.
+             if qty > 0:
+                 if is_sem_desconto:
+                     parte_sem_desc += qty * price
+                 else:
+                     parte_descontavel += qty * price
+
+
+        # Custo dos checkboxes de Notas Fiscais (quantidade é 1 se marcado)
+        for note_m, var in self.notes_vars.items():
+            if var.get() == 1: # Se marcado (quantidade é 1)
+                price = precos_mensais.get(note_m, 0.0)
+                # Tipos de Notas geralmente não estão no SEM_DESCONTO com base no código antigo
+                parte_descontavel += price
+
+
+        # Custo de módulos dinâmicos (quantidade total * preço)
+        for module_name in self.quantifiable_modules:
+            # Obter a quantidade usando .get() da IntVar
+            qty = self.module_quantities[module_name].get()
+            if qty > 0:
+                price = precos_mensais.get(module_name, 0.0)
+                if module_name in SEM_DESCONTO:
+                     parte_sem_desc += qty * price
                 else:
-                    desconto_aplicado_percent = 0.0
-                self.desconto_personalizado.set(str(round(desconto_aplicado_percent)))
+                     parte_descontavel += qty * price
 
-            elif self.user_override_discount_active.get():
-                desc_custom = float(self.desconto_personalizado.get().replace(",", "."))
-                if desc_custom < 0: desc_custom = 0
-                desc_dec = desc_custom / 100.0
-                desconto_aplicado_percent = desc_custom
-                base_sem_fid_mais_extras_descont = base_mensal_sem_fidelidade + total_extras_descontavel
-                final_mensal_efetivo_anual = (base_sem_fid_mais_extras_descont * (1 - desc_dec)) + total_extras_nao_descontavel
-                final_anual_total = final_mensal_efetivo_anual * 12.0
-                self.valor_anual_editavel.set(f"{final_anual_total:.2f}")
 
-            else:
-                # Cálculo Padrão
-                final_mensal_efetivo_anual = total_mensal_efetivo_anual_base_calc
-                final_anual_total = final_mensal_efetivo_anual * 12.0
-                if total_mensal_sem_fidelidade > 0.01:
-                     desconto_calc = ((total_mensal_sem_fidelidade - final_mensal_efetivo_anual) / total_mensal_sem_fidelidade) * 100
-                     desconto_aplicado_percent = max(0, desconto_calc)
-                else: desconto_aplicado_percent = 0.0
-                self.valor_anual_editavel.set(f"{final_anual_total:.2f}")
-                self.desconto_personalizado.set(str(round(desconto_aplicado_percent)))
+        # --- Cálculo do Valor Mensal Final ---
+        valor_mensal_automatico = parte_descontavel + parte_sem_desc
 
-        except ValueError:
-             # Erro na conversão, reverte para padrão
-             print("Erro de valor na edição manual, revertendo...")
-             final_mensal_efetivo_anual = total_mensal_efetivo_anual_base_calc
-             final_anual_total = final_mensal_efetivo_anual * 12.0
-             if total_mensal_sem_fidelidade > 0.01:
-                 desconto_calc = ((total_mensal_sem_fidelidade - final_mensal_efetivo_anual) / total_mensal_sem_fidelidade) * 100
-                 desconto_aplicado_percent = max(0, desconto_calc)
-             else: desconto_aplicado_percent = 0.0
-             self.valor_anual_editavel.set(f"{final_anual_total:.2f}")
-             self.desconto_personalizado.set(str(round(desconto_aplicado_percent)))
-             self.user_override_anual_active.set(False)
-             self.user_override_discount_active.set(False)
+        # --- Cálculo do Valor Anual Final ---
+        # Aplicar desconto apenas à parte_descontavel
+        if self.user_override_anual_active.get():
+            try:
+                # Lidar com entrada com vírgula
+                final_anual = float(self.valor_anual_editavel.get().replace(',', '.'))
+            except ValueError:
+                # Fallback para anualizar o mensal se a entrada for inválida
+                final_anual = valor_mensal_automatico * 12
+                self.valor_anual_editavel.set(self.currency_format.format(final_anual))
+        elif self.user_override_discount_active.get():
+            try:
+                # Lidar com entrada com vírgula
+                desc_custom = float(self.desconto_personalizado.get().replace(',', '.'))
+            except ValueError:
+                desc_custom = 0.0
+            desc_dec = desc_custom / 100.0
+            # Aplicar desconto à porção *descontável*
+            descontavel_anual = parte_descontavel * 12 * (1 - desc_dec)
+            sem_desc_anual = parte_sem_desc * 12
+            final_anual = descontavel_anual + sem_desc_anual
 
-        # --- Custo Adicional ---
-        custo_adicional = 0.0
-        label_custo = "Treinamento"
-        if is_bling_plan: label_custo = "Implementação"
-        elif is_autoatendimento_plano: label_custo = "Setup"
+            # Garantir que o preço anual não seja menor que a parte não descontável anualizada
+            final_anual = max(final_anual, parte_sem_desc * 12)
 
-        if not is_bling_plan and not is_autoatendimento_plano and not is_em_branco_plano:
-            limite_custo = 549.90
-            if total_mensal_sem_fidelidade > 0.01 and total_mensal_sem_fidelidade < limite_custo:
-                custo_adicional = limite_custo - total_mensal_sem_fidelidade
-
-        # --- Atualizar UI ---
-        mensal_sem_fid_str = f"{total_mensal_sem_fidelidade:.2f}".replace(".", ",")
-        mensal_no_anual_str = f"{final_mensal_efetivo_anual:.2f}".replace(".", ",")
-        anual_total_str = f"{final_anual_total:.2f}".replace(".", ",")
-        custo_adic_str = f"{custo_adicional:.2f}".replace(".", ",")
-        desconto_final_percent = round(desconto_aplicado_percent)
-
-        self.lbl_plano_mensal_sem_fid.config(text=f"Mensal (Sem Fidelidade): R$ {mensal_sem_fid_str}")
-        if custo_adicional > 0.01:
-            self.lbl_treinamento.config(text=f"+ Custo {label_custo}: R$ {custo_adic_str}")
-            if not self.lbl_treinamento.winfo_ismapped(): # Evita re-empacotar se já visível
-                self.lbl_treinamento.pack(pady=(0, 5), anchor="w", padx=15)
+            self.valor_anual_editavel.set(self.currency_format.format(final_anual))
         else:
-             if self.lbl_treinamento.winfo_ismapped(): # Oculta apenas se estava visível
-                 self.lbl_treinamento.pack_forget()
+            # Desconto anual padrão (10%) na parte descontável
+            desc_padrao = 0.10
+            descontavel_anual = parte_descontavel * 12 * (1 - desc_padrao)
+            sem_desc_anual = parte_sem_desc * 12
+            final_anual = descontavel_anual + sem_desc_anual
 
-        self.lbl_plano_mensal_no_anual.config(text=f"Mensal (no Plano Anual): R$ {mensal_no_anual_str}")
-        self.lbl_plano_anual_total.config(text=f"Anual (Pagamento Único): R$ {anual_total_str}")
-        self.lbl_desconto.config(text=f"Desconto Anual Aplicado: {desconto_final_percent}%")
+            # Garantir que o preço anual não seja menor que a parte não descontável anualizada
+            final_anual = max(final_anual, parte_sem_desc * 12)
 
-        # --- Armazenar Valores Computados ---
-        self.computed_mensal_sem_fidelidade = total_mensal_sem_fidelidade
-        self.computed_mensal_efetivo_anual = final_mensal_efetivo_anual
-        self.computed_anual_total = final_anual_total
-        self.computed_desconto_percent = desconto_final_percent
-        self.computed_custo_adicional = custo_adicional
+            self.valor_anual_editavel.set(self.currency_format.format(final_anual))
+
+
+        # Custo treinamento (simplificado para 0 com base na falta de novas regras)
+        training_cost = 0.0
+        self.lbl_treinamento.config(text=f"Custo Treinamento (Mensal): R$ {self.currency_format.format(training_cost)}")
+
+
+        # Atualização das labels
+        self.lbl_plano_mensal.config(text=f"Plano (Mensal): R$ {self.currency_format.format(valor_mensal_automatico)}")
+        self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {self.currency_format.format(final_anual)}")
+
+
+        # Calcular e exibir porcentagem de desconto
+        total_mensal_anualizado = valor_mensal_automatico * 12
+        if total_mensal_anualizado > 0:
+            # O desconto é a diferença entre o custo mensal total anualizado e o custo anual total
+            desconto_val = total_mensal_anualizado - final_anual
+            desconto_percent = (desconto_val / total_mensal_anualizado) * 100
+        else:
+            desconto_percent = 0.0
+
+        self.lbl_desconto.config(text=f"Desconto: {max(0, round(desconto_percent))}%") # Garantir porcentagem não negativa
+
+        self.computed_mensal = valor_mensal_automatico
+        self.computed_anual = final_anual
+        self.computed_desconto_percent = max(0, round(desconto_percent)) # Garantir porcentagem não negativa
+
+        # Atualizar estado dos checkboxes com base nas quantidades dos spinboxes após o cálculo
+        for module_name in self.quantifiable_modules:
+            widgets = self.module_widgets.get(module_name)
+            if widgets:
+                widgets['check_var'].set(widgets['spin_var'].get() > 0)
+
+        # Atualizar estado dos checkboxes de Notas Fiscais após o cálculo (já feito no handler de exclusividade, mas garantir)
+        # for note_m, var in self.notes_vars.items():
+        #     if var.get() == 1:
+        #         pass # Já está marcado
+        #     else:
+        #         pass # Já está desmarcado
+
 
     def montar_lista_modulos(self):
-        """ Monta a string formatada com a lista de módulos ativos para a proposta. """
         linhas = []
-        info = PLAN_INFO.get(self.current_plan, {})
-        mandatory = info.get("mandatory", [])
-        modulos_ja_listados = set()
 
-        # 1. Itens de Spinbox
-        pdv_val = self.spin_pdv_var.get()
-        if pdv_val > 0 or "PDV - Frente de Caixa" in mandatory:
-            linhas.append(f"{pdv_val}x PDV - Frente de Caixa")
-            modulos_ja_listados.add("PDV - Frente de Caixa")
+        # Adicionar itens com base em spinboxes dedicadas se a quantidade > 0
+        selected_pdv = self.spin_pdv_var.get()
+        if selected_pdv > 0:
+             linhas.append(f"{selected_pdv} PDVs")
 
-        usr_val = self.spin_users_var.get()
-        if usr_val > 0 or "Usuários" in mandatory:
-            linhas.append(f"{usr_val}x Usuários")
-            modulos_ja_listados.add("Usuários")
+        selected_users = self.spin_users_var.get()
+        if selected_users > 0:
+             linhas.append(f"{selected_users} Usuário{'s' if selected_users > 1 else ''}")
 
-        smart_tef_val = self.spin_smart_tef_var.get()
-        if smart_tef_val > 0 or "Smart TEF" in mandatory:
-            extra_info = ""
-            if self.current_plan == "Gestão" and smart_tef_val > 0: extra_info = " (Limite: 3)"
-            elif self.current_plan == "Performance" and smart_tef_val == 3: extra_info = " (Inclusos no plano)"
-            linhas.append(f"{smart_tef_val}x Smart TEF{extra_info}")
-            modulos_ja_listados.add("Smart TEF")
+        auto_qty = self.spin_terminais_auto_var.get() # Nome correto da variável
+        if auto_qty > 0:
+             linhas.append(f"{auto_qty} Terminal{'is' if auto_qty > 1 else ''} Autoatendimento")
 
-        taa_val = self.spin_terminais_aa_var.get()
-        if taa_val > 0 or "Terminais Autoatendimento" in mandatory:
-             extra_info = ""
-             if self.current_plan == "Autoatendimento" and taa_val >= 1: extra_info = " (Incluso no plano)" # >= 1 para garantir
-             linhas.append(f"{taa_val}x Terminais Autoatendimento{extra_info}")
-             modulos_ja_listados.add("Terminais Autoatendimento")
+        card_qty = self.spin_cardapio_var.get()
+        if card_qty > 0:
+            # Usar o nome exato de precos_mensais
+            linhas.append(f"{card_qty} Cardápio(s) Digital(is)")
 
-        # 2. Módulos Mandatórios (que ainda não foram listados)
-        for m in mandatory:
-            if m not in modulos_ja_listados:
-                 prefix = "1x "
-                 if "Notas Fiscais" in m or "Suporte" in m or "Relatório" in m: prefix = ""
-                 linhas.append(f"{prefix}{m}")
-                 modulos_ja_listados.add(m)
+        tef_qty = self.spin_tef_var.get()
+        if tef_qty > 0:
+             linhas.append(f"{tef_qty} TEF")
 
-        # 3. Módulos Opcionais (Checkboxes marcados)
-        for m, var_m in self.modules.items():
-            if m in self.check_buttons and var_m.get() == 1: # Apenas os visíveis e marcados
-                if m not in mandatory and m not in modulos_ja_listados:
-                     linhas.append(f"1x {m}")
-                     modulos_ja_listados.add(m)
+        smart_tef_qty = self.spin_smart_tef_var.get()
+        if smart_tef_qty > 0:
+             linhas.append(f"{smart_tef_qty} Smart TEF")
 
-        # 4. Formatação Final
+        app_cplug_qty = self.spin_app_cplug_var.get()
+        if app_cplug_qty > 0:
+             linhas.append(f"{app_cplug_qty} App Gestão CPlug")
+
+        ddb_qty = self.spin_delivery_direto_basico_var.get()
+        if ddb_qty > 0:
+             linhas.append(f"{ddb_qty} Delivery Direto Básico")
+
+
+        # Adicionar Notas Fiscais selecionadas (apenas se quantidade > 0)
+        for note_m, var in self.notes_vars.items():
+            if var.get() == 1: # Quantidade é 1 se marcado
+                linhas.append(note_m)
+
+
+        # Adicionar módulos dinâmicos se a quantidade > 0
+        for module_name in self.quantifiable_modules:
+            qty = self.module_quantities[module_name].get()
+            if qty > 0:
+                 # Caso especial: Delivery Direto Profissional e VIP geralmente são itens únicos
+                 if module_name in ["Delivery Direto Profissional", "Delivery Direto VIP"]:
+                     linhas.append(module_name) # Não mostrar quantidade
+                 else:
+                    linhas.append(f"{qty} {module_name}{'s' if qty > 1 else ''}")
+
+
+        # Adicionar módulos obrigatórios fixos que não têm preço/spinbox se incluídos no plano
+        mandatory = PLAN_INFO.get(self.current_plan, {}).get("mandatory", [])
+        fixed_no_price_modules = [
+            "Suporte Técnico - Via chamados",
+            "Relatório Básico",
+            "Painel Senha TV", # Listado como fixo em Gestão/Performance
+            "Relatórios",     # Listado como fixo em Gestão/Performance
+            "Suporte Técnico - Via chat", # Listado como fixo em Gestão/Performance
+            # Relatório KDS tem preço e spinbox agora - lidado acima como quantificável
+            "PDV - Frente de Caixa", # Nome da funcionalidade (quantidade base lidada pelo spinbox de PDVs)
+            "Usuários", # Nome da funcionalidade (quantidade base lidada pelo spinbox de Usuários)
+            "Smart TEF", # Nome da funcionalidade (quantidade base lidada pelo spinbox de Smart TEF)
+            "Vendas - Estoque - Financeiro" # Fixo em planos antigos, mantido no mandatory do Bling
+        ]
+        for fixed_mod in fixed_no_price_modules:
+             if fixed_mod in mandatory and fixed_mod not in linhas: # Evitar adicionar duplicatas
+                  linhas.append(fixed_mod)
+
+
         unique_mods = []
-        for item in linhas:
-            if item not in unique_mods: unique_mods.append(item)
-        # unique_mods.sort() # Ordenar opcionalmente
+        for mod in linhas:
+            if mod not in unique_mods:
+                unique_mods.append(mod)
 
-        montagem = "\n".join(f"•    {m}" for m in unique_mods)
-        return montagem
+        # Ordenar a lista final alfabeticamente para consistência
+        unique_mods.sort()
+
+        return unique_mods
+
 
     def gerar_dados_proposta(self, nome_closer, cel_closer, email_closer):
-        """ Gera o dicionário de dados para preencher o slide da proposta. """
-        nome_plano_selecionado = self.current_plan
-        nome_plano_editado = self.nome_plano_var.get().strip()
-        nome_plano_final = nome_plano_editado if nome_plano_editado else nome_plano_selecionado
+        # Manter esta função em grande parte como está, garantir que use os valores calculados
+        # e a montar_lista_modulos atualizada
+        nome_plano = self.nome_plano_var.get().strip() or "Plano"
 
-        # --- Valores Formatados ---
-        mensal_sem_fid_val = self.computed_mensal_sem_fidelidade
-        mensal_efetivo_anual_val = self.computed_mensal_efetivo_anual
-        anual_total_val = self.computed_anual_total
-        custo_adicional_val = self.computed_custo_adicional
-        desconto_percent_val = self.computed_desconto_percent
+        valor_mensal = self.computed_mensal
+        valor_anual = self.computed_anual
+        desconto_percent = self.computed_desconto_percent
 
-        mensal_sem_fid_str = f"R$ {mensal_sem_fid_val:.2f}".replace(".", ",")
-        mensal_efetivo_anual_str = f"R$ {mensal_efetivo_anual_val:.2f}".replace(".", ",")
-        anual_total_str = f"R$ {anual_total_val:.2f}".replace(".", ",")
-        custo_adicional_str = f"R$ {custo_adicional_val:.2f}".replace(".", ",")
+        # Cálculo do custo de treinamento (atualmente 0.0)
+        training_cost = 0.0 # Simplificado conforme decisão em atualizar_valores
 
-        label_custo = "Treinamento"
-        if self.current_plan.startswith("Bling"): label_custo = "Implementação"
-        elif self.current_plan == "Autoatendimento": label_custo = "Setup"
+        plano_mensal_str = f"R$ {self.currency_format.format(valor_mensal)}"
+        # Adicionar custo de treinamento à exibição se > 0
+        if training_cost > 0.01: # Usar um pequeno limiar
+             part_mensal_formatted = self.currency_format.format(valor_mensal)
+             part_training_formatted = self.currency_format.format(training_cost)
+             plano_mensal_str = f"R$ {part_mensal_formatted} + R$ {part_training_formatted} (Treinamento)"
 
-        str_mensal_completa = mensal_sem_fid_str
-        if custo_adicional_val > 0.01:
-            str_mensal_completa += f" + {custo_adicional_str} ({label_custo})"
 
-        # --- Definir Suporte ---
-        tipo_suporte = "Regular"; horario_suporte = "09:00 às 17:00 de Segunda a Sexta-feira"
-        suporte_chat_ativo = self.modules.get("Suporte Técnico - Via chat", tk.IntVar()).get() == 1
-        suporte_estendido_ativo = self.modules.get("Suporte Técnico - Estendido", tk.IntVar()).get() == 1
+        plano_anual_str = f"R$ {self.currency_format.format(valor_anual)}"
 
-        if self.current_plan == "Performance" or suporte_estendido_ativo:
-             tipo_suporte = "Estendido"; horario_suporte = "09:00 às 22:00 Seg-Sex & 11:00 às 21:00 Sab-Dom"
-        elif suporte_chat_ativo:
-             tipo_suporte = "Chat Incluso"; horario_suporte = "09:00 às 22:00 Seg-Sex & 11:00 às 21:00 Sab-Dom"
+        # Lógica de suporte baseada no valor anual (mantida)
+        if valor_anual >= 269.90: # Este limiar pode precisar de ajuste com base nos novos níveis de preços
+            tipo_suporte = "Estendido"
+            horario_suporte = "09:00 às 22:00 de Segunda a Sexta-feira & Sábado e Domingo das 11:00 às 21:00"
+        else:
+            tipo_suporte = "Regular"
+            horario_suporte = "09:00 às 17:00 de Segunda a Sexta-feira"
 
-        # --- Montar Lista de Módulos ---
-        montagem_formatada = self.montar_lista_modulos()
+        lista_mods = self.montar_lista_modulos()
+        montagem = "\n".join(f"•    {m}" for m in lista_mods)
 
-        # --- Calcular Economia Anual ---
-        economia_str = ""
-        custo_total_mensalizado = (mensal_sem_fid_val * 12) + custo_adicional_val
-        custo_total_anualizado = anual_total_val
-        if custo_total_mensalizado > custo_total_anualizado + 0.01:
-             economia_val = custo_total_mensalizado - custo_total_anualizado
-             econ_str = f"{economia_val:.2f}".replace(".", ",")
-             economia_str = f"Economia de R$ {econ_str} no plano anual"
+        # Cálculo de economia anual (mantido)
+        # Recalcular com base nos valores atuais
+        custo_anual_mensalizado = valor_mensal * 12 + training_cost # Incluir custo de treinamento
+        custo_anual_plano = valor_anual * 12
+        economia_val = custo_anual_mensalizado - custo_anual_plano
 
-        # --- Dicionário Final ---
+        if economia_val > 0.1: # Usar um pequeno limiar para comparação de ponto flutuante
+             econ = self.currency_format.format(economia_val)
+             economia_str = f"Economia de R$ {econ} ao ano"
+        else:
+             economia_str = ""
+
+
         dados = {
-            "montagem_do_plano": montagem_formatada,
-            "plano_mensal_sem_fidelidade": str_mensal_completa,
-            "plano_mensal_no_anual": mensal_efetivo_anual_str,
-            "plano_anual_total": anual_total_str,
-            "custo_treinamento": custo_adicional_str if custo_adicional_val > 0.01 else "Incluso",
-            "desconto_aplicado": f"{desconto_percent_val}%",
-            "nome_do_plano": nome_plano_final,
+            "montagem_do_plano": montagem,
+            "plano_mensal": plano_mensal_str,
+            "plano_anual": plano_anual_str,
+            "desconto_total": f"{desconto_percent}%",
+            "nome_do_plano": nome_plano,
             "tipo_de_suporte": tipo_suporte,
             "horario_de_suporte": horario_suporte,
             "validade_proposta": self.validade_proposta_var.get(),
@@ -989,540 +1032,656 @@ class PlanoFrame(ttkb.Frame):
             "celular_closer": cel_closer,
             "email_closer": email_closer,
             "nome_cliente": self.nome_cliente_var.get(),
-            "economia_anual": economia_str,
-            "data_geracao": date.today().strftime("%d/%m/%Y")
+            "economia_anual": economia_str
         }
+
         return dados
 
 
-# --- Funções de Geração de PPTX (Proposta e Material) ---
-
-# *** MAPEAMENTO DE MÓDULOS PARA SLIDES ***
-# Ajuste as chaves (placeholders no PPTX) e valores (nomes dos módulos no Python)
-MAPEAMENTO_MODULOS_MATERIAL = {
-    "slide_sempre": None,
-    "slide_bling": {"Bling - Básico", "Bling - Com Estoque em Grade"},
-    "check_sistema_kds": "Relatório KDS", "check_Hub_de_Delivery": "Hub de Delivery",
-    "check_integracao_api": "Integração API", "check_integracao_tap": "Integração Tap",
-    "check_controle_de_mesas": "Controle de Mesas", "check_Delivery": "Delivery",
-    "check_producao": "Produção", "check_Estoque_em_Grade": "Estoque em Grade",
-    "check_Facilita_NFE": "Facilita NFE", "check_Importacao_de_xml": "Importação de XML",
-    "check_conciliacao_bancaria": "Conciliação Bancária", "check_contratos_de_cartoes": "Contratos de cartões e outros",
-    "check_ordem_de_servico": "Ordem de Serviço", "check_relatorio_dinamico": "Relatório Dinâmico",
-    "check_programa_de_fidelidade": "Programa de Fidelidade", "check_business_intelligence": "Business Intelligence (BI)",
-    "check_smartmenu": "Smart Menu", "check_backup_real_time": "Backup Realtime",
-    "check_att_tempo_real": "Atualização em tempo real", "check_promocao": "Promoções",
-    "check_marketing": "Marketing", "placeholder_pdv": "PDV - Frente de Caixa",
-    "placeholder_smarttef": "Smart TEF", "placeholder_tef": "TEF",
-    "placeholder_autoatendimento": "Terminais Autoatendimento", "placeholder_cardapio_digital": "Cardápio digital",
-    "placeholder_app_gestao_cplug": "App Gestão CPlug", "check_delivery_direto_vip": "Delivery Direto VIP",
-    "check_delivery_direto_profissional": "Delivery Direto Profissional",
-    "placeholder_painel_senha_tv": "Painel Senha TV", "placeholder_painel_senha_mobile": "Painel Senha Mobile",
-    "placeholder_suporte_chat": "Suporte Técnico - Via chat", "placeholder_suporte_estendido": "Suporte Técnico - Estendido",
-    "placeholder_notas_fiscais": {"Notas Fiscais Ilimitadas", "30 Notas Fiscais"},
-}
-
-MAPEAMENTO_MODULOS_PROPOSTA = {
-    "slide_sempre": None,
-    # Se a proposta não tiver slides condicionais, este dicionário pode ficar vazio ou apenas com 'slide_sempre'.
-    # Se tiver, adicione mapeamentos como no exemplo do Material.
-    # Ex: "slide_proposta_condicional": "ModuloEspecificoDaProposta"
-}
-
-
-def _processar_geracao_pptx(tipo_arquivo, pptx_template_path, lista_abas, nome_closer, cel_closer, email_closer, mapeamento_slides):
-    """Função interna para gerar Proposta ou Material Técnico."""
-    template_full_path = os.path.join(script_dir, pptx_template_path) # Garante caminho correto
-    if not os.path.exists(template_full_path):
-        showerror("Erro", f"Arquivo template '{os.path.basename(pptx_template_path)}' não encontrado em\n{script_dir}")
+# ---------------------------------------------------------
+# Funções que geram .pptx (Proposta e Material) (Mantidas)
+# ---------------------------------------------------------
+def gerar_proposta(lista_abas, nome_closer, celular_closer, email_closer):
+    ppt_file = "Proposta Comercial ConnectPlug.pptx"
+    if not os.path.exists(ppt_file):
+        showerror("Erro", f"Arquivo '{ppt_file}' não encontrado!")
         return None
 
     try:
-        prs = Presentation(template_full_path)
+        prs = Presentation(ppt_file)
     except Exception as e:
-        showerror("Erro", f"Falha ao abrir '{os.path.basename(pptx_template_path)}': {e}")
+        showerror("Erro", f"Falha ao abrir '{ppt_file}': {e}")
         return None
 
     if not lista_abas:
-        showerror("Erro", f"Não há abas ativas para gerar {tipo_arquivo}.")
+        showerror("Erro", "Não há abas para gerar Proposta.")
         return None
 
-    # --- 1. Coletar dados e módulos ativos ---
-    primeira_aba = lista_abas[0]
-    dados_globais = primeira_aba.gerar_dados_proposta(nome_closer, cel_closer, email_closer)
+    # 1) Descobrir quais slides manter (opcional) - Manter lógica
+    abas_indices = sorted([aba.aba_index for aba in lista_abas])
+    used_plans = {aba.current_plan for aba in lista_abas}
 
-    modulos_ativos_geral = set()
-    planos_usados_geral = set()
-    for aba in lista_abas:
-        planos_usados_geral.add(aba.current_plan)
-        info_aba = PLAN_INFO.get(aba.current_plan, {})
-        mandatory_aba = info_aba.get("mandatory", [])
-        for mod in mandatory_aba: modulos_ativos_geral.add(mod)
-        for nome_mod, var_mod in aba.modules.items():
-            if var_mod.get() == 1: modulos_ativos_geral.add(nome_mod)
-        # Adiciona itens de spinbox
-        if aba.spin_pdv_var.get() > 0: modulos_ativos_geral.add("PDV - Frente de Caixa")
-        if aba.spin_users_var.get() > 0: modulos_ativos_geral.add("Usuários")
-        if aba.spin_smart_tef_var.get() > 0: modulos_ativos_geral.add("Smart TEF")
-        if aba.spin_terminais_aa_var.get() > 0: modulos_ativos_geral.add("Terminais Autoatendimento")
-        if aba.modules.get("TEF", tk.IntVar()).get() == 1: modulos_ativos_geral.add("TEF")
-
-    print(f"--- {tipo_arquivo} ---")
-    print(f"Planos usados: {planos_usados_geral}")
-    # print(f"Módulos ativos (geral): {modulos_ativos_geral}") # Opcional: muito verbose
-
-
-    # --- 2. Decidir quais slides manter ---
     keep_slides = set()
-    num_slides_original = len(prs.slides)
-    print(f"Analisando {num_slides_original} slides do template...")
+    slide_map_aba = {}
 
     for i, slide in enumerate(prs.slides):
-        slide_mantido = False
-        # Verifica o texto em todas as shapes do slide
+        texts = []
         for shape in slide.shapes:
-             if slide_mantido: break
-             if shape.has_text_frame:
-                 full_shape_text = "" # Concatena texto do shape para busca
-                 try: # Adiciona try-except para shape.text que pode falhar
-                     full_shape_text = shape.text
-                 except Exception:
-                     # Tenta pegar por parágrafos/runs se .text falhar
-                     for p in shape.text_frame.paragraphs:
-                         for r in p.runs:
-                             full_shape_text += r.text
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        texts.append(run.text)
+        full_txt = " ".join(texts)
 
-                 # Verifica se algum placeholder do mapeamento está no texto do shape
-                 for placeholder, modulo_mapeado in mapeamento_slides.items():
-                     if placeholder in full_shape_text:
-                         if modulo_mapeado is None: # {slide_sempre}
-                             slide_mantido = True; break
-                         elif isinstance(modulo_mapeado, set): # Conjunto de módulos
-                             if any(m in modulos_ativos_geral for m in modulo_mapeado):
-                                 slide_mantido = True; break
-                             if placeholder == "slide_bling" and any(p.startswith("Bling -") for p in planos_usados_geral):
-                                  slide_mantido = True; break
-                         elif isinstance(modulo_mapeado, str): # Módulo único
-                             if modulo_mapeado in modulos_ativos_geral:
-                                 slide_mantido = True; break
+        # Exemplo: se tiver "slide_bling", só mantém se "Bling" estiver em used_plans
+        if "slide_bling" in full_txt:
+            if "Bling" not in used_plans:
+                continue
 
-        if slide_mantido: keep_slides.add(i)
-
-    # --- 3. Remover slides não mantidos ---
-    num_slides_remover = num_slides_original - len(keep_slides)
-    print(f"Decisão: Manter {len(keep_slides)} slides, remover {num_slides_remover}.")
-
-    if num_slides_remover > 0:
-        # Cria uma lista dos IDs dos slides a serem removidos
-        slides_to_remove_ids = []
-        for idx in range(num_slides_original):
-            if idx not in keep_slides:
-                 try:
-                     slides_to_remove_ids.append(prs.slides._sldIdLst[idx].rId)
-                 except IndexError:
-                      print(f"Aviso: Índice {idx} fora do alcance ao tentar obter rId para remoção.")
-
-        # Remove os slides da apresentação usando os IDs coletados
-        if slides_to_remove_ids:
-            print(f"Removendo {len(slides_to_remove_ids)} slides...")
-            removed_count = 0
-            original_slide_list = list(prs.slides._sldIdLst) # Copia a lista original
-            prs.slides._sldIdLst.clear() # Limpa a lista na apresentação
-
-            for sldId in original_slide_list:
-                if sldId.rId not in slides_to_remove_ids:
-                    prs.slides._sldIdLst.append(sldId) # Readiciona os que devem ficar
-                else:
-                    try:
-                        prs.part.drop_rel(sldId.rId) # Remove relacionamento da parte
-                        removed_count += 1
-                    except KeyError:
-                        print(f"Aviso: Relacionamento '{sldId.rId}' não encontrado para remoção (pode já ter sido removido).")
-                    except Exception as e_rem:
-                        print(f"Aviso: Erro ao remover slide com rId {sldId.rId}: {e_rem}")
-
-            print(f"Remoção concluída. {removed_count} slides removidos. Slides restantes: {len(prs.slides)}")
+        found_aba = None
+        if "aba_plano_" not in full_txt:
+            # Slide genérico => mantém
+            keep_slides.add(i)
+            slide_map_aba[i] = None
         else:
-             print("Nenhum ID de slide válido para remoção encontrado.")
+            # Slide para aba específica
+            for x in abas_indices:
+                marker = f"aba_plano_{x}"
+                if marker in full_txt:
+                    found_aba = x
+                    break
+            if found_aba is not None:
+                keep_slides.add(i)
+                slide_map_aba[i] = found_aba
 
-    else:
-        print("Nenhum slide para remover.")
+    # 2) Remover slides não mantidos - Manter lógica
+    for idx in reversed(range(len(prs.slides))):
+        if idx not in keep_slides:
+            rid = prs.slides._sldIdLst[idx].rId
+            prs.part.drop_rel(rid)
+            del prs.slides._sldIdLst[idx]
+
+    # 3) Re-mapear índices - Manter lógica
+    sorted_kept = sorted(list(keep_slides)) # Converter para lista antes de ordenar
+    new_order_map = {}
+    # Ajustar a iteração sobre slides após remoção
+    for new_idx, slide in enumerate(prs.slides):
+        # Encontrar o índice original deste slide
+        # Isso requer comparar o slide atual com os slides originais antes da remoção
+        # Ou, mais simples, usar o new_idx e sorted_kept para encontrar o old_idx correspondente
+        if new_idx < len(sorted_kept): # Verificar limite para evitar IndexError
+             old_idx = sorted_kept[new_idx]
+             if old_idx in slide_map_aba: # Garantir que o old_idx estava no mapa
+                 new_order_map[new_idx] = slide_map_aba[old_idx]
+             else:
+                 new_order_map[new_idx] = None # Slide genérico ou não mapeado
 
 
-    # --- 4. Substituir placeholders nos slides restantes ---
-    print("Substituindo placeholders...")
-    for slide_idx, slide in enumerate(prs.slides):
-        # print(f"  Substituindo no slide {slide_idx+1}...") # Debug Opcional
-        try:
-            substituir_placeholders_no_slide(slide, dados_globais)
-        except Exception as e_sub:
-             print(f"Erro ao substituir placeholders no slide {slide_idx + 1}: {e_sub}")
-             # Decidir se continua ou para
-             # showerror("Erro Placeholders", f"Falha ao processar slide {slide_idx + 1}.\nErro: {e_sub}")
-             # return None # Descomentar para parar em caso de erro
+    # 4) Substituir placeholders - Manter lógica
+    dados_de_aba = {}
+    for aba in lista_abas:
+        d = aba.gerar_dados_proposta(nome_closer, celular_closer, email_closer)
+        dados_de_aba[aba.aba_index] = d
 
-    # --- 5. Salvar o arquivo final ---
-    nome_cliente_safe = dados_globais.get("nome_cliente", "SemNome").replace("/", "-").replace("\\", "-")
+    # Fallback: se não tiver slides específicos, use dados da primeira aba
+    fallback_aba = lista_abas[0]
+    d_fallback = dados_de_aba[fallback_aba.aba_index]
+
+    for new_idx, slide in enumerate(prs.slides):
+        aba_num = new_order_map.get(new_idx, None) # Usar .get para segurança
+        if aba_num is None:
+            substituir_placeholders_no_slide(slide, d_fallback)
+        else:
+            d_aba = dados_de_aba.get(aba_num, d_fallback) # Usar dados da aba específica, fallback para a primeira
+            substituir_placeholders_no_slide(slide, d_aba)
+
+    # 5) Salvar - Manter lógica
+    nome_cliente_primeira = d_fallback.get("nome_cliente", "SemNome")
     hoje_str = date.today().strftime("%d-%m-%Y")
-    prefixo_arquivo = "Proposta ConnectPlug" if tipo_arquivo == "Proposta" else "Material Tecnico ConnectPlug"
-    # Salva na mesma pasta do script
-    nome_arquivo_final = os.path.join(script_dir, f"{prefixo_arquivo} - {nome_cliente_safe} - {hoje_str}.pptx")
+    nome_arquivo = f"Proposta ConnectPlug - {nome_cliente_primeira} - {hoje_str}.pptx"
 
     try:
-        print(f"Salvando arquivo final em: {nome_arquivo_final}")
-        prs.save(nome_arquivo_final)
-        showinfo("Sucesso", f"{tipo_arquivo} gerada com sucesso:\n{os.path.basename(nome_arquivo_final)}")
-        return nome_arquivo_final
-    except PermissionError as e:
-         showerror("Erro de Permissão", f"Não foi possível salvar '{os.path.basename(nome_arquivo_final)}'.\nVerifique se o arquivo não está aberto ou se você tem permissão para escrever na pasta:\n{script_dir}\nErro: {e}")
-         return None
+        prs.save(nome_arquivo)
+        showinfo("Sucesso", f"Proposta gerada: '{nome_arquivo}'")
+        return nome_arquivo
     except Exception as e:
-        showerror("Erro ao Salvar", f"Falha desconhecida ao salvar '{os.path.basename(nome_arquivo_final)}':\n{e}")
+        showerror("Erro", f"Falha ao salvar: {e}")
+        return None
+
+def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
+    mat_file = "Material Tecnico ConnectPlug.pptx"
+    if not os.path.exists(mat_file):
+        showerror("Erro", f"Arquivo '{mat_file}' não encontrado!")
+        return None
+
+    try:
+        prs = Presentation(mat_file)
+    except Exception as e:
+        showerror("Erro", f"Falha ao abrir '{mat_file}': {e}")
+        return None
+
+    if not lista_abas:
+        showerror("Erro", "Não há abas para gerar Material Técnico.")
+        return None
+
+    # ---------------------------------------------------
+    # 1) Descobrir módulos ativos e planos usados - ATUALIZAR para usar novas variáveis
+    # ---------------------------------------------------
+    modulos_ativos = set()
+    planos_usados = set()
+
+    for aba in lista_abas:
+        planos_usados.add(aba.current_plan)
+
+        # Módulos de checkbox+spinbox dinâmicos (se quantidade > 0)
+        for nome_mod, var_mod in aba.module_quantities.items():
+            if var_mod.get() > 0:
+                 modulos_ativos.add(nome_mod)
+
+        # Módulos de checkboxes de Notas Fiscais (se quantidade for 1)
+        for nome_mod, var_mod in aba.notes_vars.items():
+            if var_mod.get() == 1:
+                 modulos_ativos.add(nome_mod)
+
+
+        # Módulos de spinboxes dedicadas (se quantidade > 0)
+        # Precisa adicionar o *nome* do módulo/funcionalidade, não apenas a contagem
+        if aba.spin_pdv_var.get() > 0:
+            modulos_ativos.add("PDV") # Adicionar nome da funcionalidade
+        if aba.spin_users_var.get() > 0:
+            modulos_ativos.add("Usuários") # Adicionar nome da funcionalidade
+        if aba.spin_terminais_auto_var.get() > 0: # Nome correto da variável
+            modulos_ativos.add("Terminais Autoatendimento") # Adicionar nome da funcionalidade
+        if aba.spin_cardapio_var.get() > 0:
+            modulos_ativos.add("Cardápio Digital") # Adicionar nome da funcionalidade
+        if aba.spin_tef_var.get() > 0:
+            modulos_ativos.add("TEF") # Adicionar nome da funcionalidade
+        if aba.spin_smart_tef_var.get() > 0:
+            modulos_ativos.add("Smart TEF") # Adicionar nome da funcionalidade
+        if aba.spin_app_cplug_var.get() > 0:
+            modulos_ativos.add("App Gestão CPlug") # Nome exato
+        if aba.spin_delivery_direto_basico_var.get() > 0:
+            modulos_ativos.add("Delivery Direto Básico") # Adicionar nome da funcionalidade
+
+
+        # Adicionar módulos obrigatórios que são sempre incluídos como funcionalidades, mesmo sem preço/spinbox
+        mandatory_list = PLAN_INFO.get(aba.current_plan, {}).get("mandatory", [])
+        fixed_no_price_modules_in_list = [
+            "Suporte Técnico - Via chamados",
+            "Relatório Básico",
+            "Painel Senha TV",
+            "Relatórios",
+            "Suporte Técnico - Via chat",
+            # Relatório KDS está incluído como quantificável agora, mas também pode ser fixo
+            "PDV - Frente de Caixa", # Nome da funcionalidade
+            "Usuários", # Nome da funcionalidade
+            "Smart TEF", # Nome da funcionalidade
+             "Vendas - Estoque - Financeiro" # Nome da funcionalidade
+            # Notas Fiscais são tratadas via checkboxes dedicados
+        ]
+        for fixed_mod in fixed_no_price_modules_in_list:
+             if fixed_mod in mandatory_list:
+                  modulos_ativos.add(fixed_mod)
+
+        # Lidar com Relatório KDS: se está no mandatory, adicionar como ativo.
+        if "Relatório KDS" in mandatory_list:
+             modulos_ativos.add("Relatório KDS")
+
+
+    # ---------------------------------------------------
+    # 2) Mapeamento de placeholders para módulos (Manter e atualizar com novos)
+    #    Adapte conforme seus slides
+    # ---------------------------------------------------
+    # Se um slide contiver o texto "check_tef" e você quiser mantê-lo só se
+    # "TEF" estiver em modulos_ativos, defina assim:
+    MAPEAMENTO_MODULOS = {
+        "slide_sempre": None,
+        "check_sistema_kds": "Relatório KDS",
+        "check_Hub_de_Delivery": "Hub de Delivery",
+        "check_integracao_api": "Integração API",
+        "check_integracao_tap": "Integração TAP",
+        "check_controle_de_mesas": "Controle de Mesas",
+        "check_Delivery": "Delivery",
+        "check_producao": "Produção",
+        "check_Estoque_em_Grade": "Estoque em Grade",
+        "check_Facilita_NFE": "Facilita NFE",
+        "check_Importacao_de_xml": "Importação de XML",
+        "check_conciliacao_bancaria": "Conciliação Bancária",
+        "check_contratos_de_cartoes": "Contratos de cartões e outros",
+        "check_ordem_de_servico": "Ordem de Serviço",
+        "check_relatorio_dinamico": "Relatório Dinâmico",
+        "check_programa_de_fidelidade": "Programa de Fidelidade",
+        "check_business_intelligence": "Business Intelligence (BI)",
+        "check_smartmenu": "Smart Menu",
+        "check_backup_real_time": "Backup Realtime",
+        "check_att_tempo_real": "Atualização em Tempo Real",
+        "check_promocao": "Promoções",
+        "check_marketing": "Marketing",
+        "pdv_balcao": "PDV - Frente de Caixa", # Usar nome exato do mandatory list se aplicável
+        "qtd_smarttef": "Smart TEF", # Nome da funcionalidade
+        "qtd_tef": "TEF", # Nome da funcionalidade
+        "qtd_autoatendimento": "Terminais Autoatendimento", # Nome da funcionalidade
+        "qtd_cardapio_digital": "Cardápio Digital", # Nome da funcionalidade
+        "qtd_app_gestao_cplug": "App Gestão CPlug", # Nome da funcionalidade
+        "qtd_delivery_direto_basico": "Delivery Direto Básico", # Nome da funcionalidade
+        "check_delivery_direto_vip": "Delivery Direto VIP",
+        "check_delivery_direto_profissional": "Delivery Direto Profissional",
+        "check_notas_fiscais": { # Verificar se *qualquer* módulo de notas fiscais está ativo
+            "30 Notas Fiscais",
+            "60 Notas Fiscais",
+            "120 Notas Fiscais",
+            "250 Notas Fiscais",
+            "3000 Notas Fiscais",
+            "Notas Fiscais Ilimitadas"
+        },
+        # Adicionar outros placeholders potenciais dos seus slides e seus nomes de módulo correspondentes
+        "check_painel_senha_mobile": "Painel Senha Mobile",
+        "check_suporte_estendido": "Suporte Técnico - Estendido",
+        "check_painel_senha_tv": "Painel Senha TV", # Nome da funcionalidade
+        "check_suporte_chat": "Suporte Técnico - Via chat", # Nome da funcionalidade
+        "check_suporte_chamados": "Suporte Técnico - Via chamados", # Nome da funcionalidade
+        "check_relatorios": "Relatórios", # Nome da funcionalidade
+        "check_relatorio_basico": "Relatório Básico", # Nome da funcionalidade
+        "check_vendas_estoque_financeiro": "Vendas - Estoque - Financeiro" # Nome da funcionalidade
+    }
+
+    # ---------------------------------------------------
+    # 3) Decidir quais slides manter - Lógica atualizada para usar MAPEAMENTO_MODULOS com conjuntos
+    # ---------------------------------------------------
+    keep_slides = set()
+
+    for i, slide in enumerate(prs.slides):
+        texts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                       texts.append(run.text.strip())
+        full_txt = " ".join(texts)
+
+        # Flag para saber se manteremos este slide
+        slide_ok = False
+
+        # Verificar slides específicos de plano (como Bling)
+        if "slide_bling" in full_txt:
+            if "Bling" in planos_usados:
+                slide_ok = True
+        # Adicionar verificações para outros slides específicos de plano se você os tiver
+        # elif "slide_plan_pdv" in full_txt:
+        #     if "Plano PDV" in planos_usados:
+        #         slide_ok = True
+        # ... etc ...
+
+
+        # Se contiver "slide_sempre" => manter sempre
+        if "slide_sempre" in full_txt:
+            slide_ok = True
+
+        # Agora verificar placeholders do MAPEAMENTO_MODULOS
+        for placeholder, mapped_item in MAPEAMENTO_MODULOS.items():
+             if placeholder in full_txt:
+                 if mapped_item is None: # caso slide_sempre
+                     slide_ok = True
+                 elif isinstance(mapped_item, str): # Nome de módulo único
+                     if mapped_item in modulos_ativos:
+                          slide_ok = True
+                          #break # Se o primeiro placeholder encontrado for suficiente para manter o slide
+                 elif isinstance(mapped_item, set): # Conjunto de módulos mutuamente exclusivos (como Notas)
+                      if any(module_name in modulos_ativos for module_name in mapped_item):
+                           slide_ok = True
+                           #break # Se qualquer módulo do conjunto estiver ativo, manter o slide
+
+        # Se após verificar todas as regras, slide_ok ainda for False, NÃO manter o slide.
+        if slide_ok:
+            keep_slides.add(i)
+
+
+    # 4) Remover slides não mantidos - Manter lógica
+    for idx in reversed(range(len(prs.slides))):
+        if idx not in keep_slides:
+            rid = prs.slides._sldIdLst[idx].rId
+            prs.part.drop_rel(rid)
+            del prs.slides._sldIdLst[idx]
+
+    # ---------------------------------------------------
+    # 5) Substituir placeholders (dados globais) - Manter lógica
+    # ---------------------------------------------------
+    fallback_aba = lista_abas[0]
+    d_fallback = fallback_aba.gerar_dados_proposta(nome_closer, celular_closer, email_closer)
+
+    for slide in prs.slides:
+        substituir_placeholders_no_slide(slide, d_fallback)
+
+    # ---------------------------------------------------
+    # 6) Salvar pptx final - Manter lógica
+    # ---------------------------------------------------
+    nome_cliente_primeira = d_fallback.get("nome_cliente", "SemNome")
+    hoje_str = date.today().strftime("%d-%m-%Y")
+    nome_arquivo = f"Material Tecnico ConnectPlug - {nome_cliente_primeira} - {hoje_str}.pptx"
+
+    try:
+        prs.save(nome_arquivo)
+        showinfo("Sucesso", f"Material Técnico gerado: '{nome_arquivo}'")
+        return nome_arquivo
+    except Exception as e:
+        showerror("Erro", f"Falha ao salvar: {e}")
         return None
 
 
-# Funções wrapper que chamam a função interna
-def gerar_proposta(lista_abas, nome_closer, celular_closer, email_closer):
-    return _processar_geracao_pptx(
-        tipo_arquivo="Proposta",
-        pptx_template_path="Proposta Comercial ConnectPlug.pptx",
-        lista_abas=lista_abas,
-        nome_closer=nome_closer,
-        cel_closer=celular_closer,
-        email_closer=email_closer,
-        mapeamento_slides=MAPEAMENTO_MODULOS_PROPOSTA # Usa mapeamento da proposta
-    )
 
-def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
-     return _processar_geracao_pptx(
-        tipo_arquivo="Material Técnico",
-        pptx_template_path="Material Tecnico ConnectPlug.pptx",
-        lista_abas=lista_abas,
-        nome_closer=nome_closer,
-        cel_closer=celular_closer,
-        email_closer=email_closer,
-        mapeamento_slides=MAPEAMENTO_MODULOS_MATERIAL # Usa mapeamento do material
-    )
-
-
-# --- Google Drive / Auth / Upload ---
+# ---------------------------------------------------------
+# Google Drive / Auth (Mantido)
+# ---------------------------------------------------------
 SCOPES = ['https://www.googleapis.com/auth/drive']
-CLIENT_SECRET_URL = "https://github.com/DevRGS/Gerador/raw/refs/heads/main/config/client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json"
-# Define caminhos absolutos baseados no diretório do script
-CLIENT_SECRET_LOCAL_FILE = os.path.join(script_dir, "client_secret_temp.json")
-TOKEN_FILE = os.path.join(script_dir, 'token.json')
 
 def baixar_client_secret_remoto():
-    """Baixa o client_secret.json do GitHub se não existir localmente."""
-    if not os.path.exists(CLIENT_SECRET_LOCAL_FILE):
-        print(f"Baixando {os.path.basename(CLIENT_SECRET_LOCAL_FILE)} do GitHub...")
+    """Baixa o client_secret.json do repositório no GitHub se ainda não estiver salvo localmente."""
+    url = "https://github.com/DevRGS/Gerador/raw/refs/heads/main/config/client_secret_788265418970-ur6f189oqvsttseeg6g77fegt0su67dj.apps.googleusercontent.com.json"
+    nome_local = "client_secret_temp.json"
+
+    if not os.path.exists(nome_local):
+        print("Baixando client_secret do GitHub...")
         try:
-            r = requests.get(CLIENT_SECRET_URL, timeout=15)
-            r.raise_for_status()
-            with open(CLIENT_SECRET_LOCAL_FILE, "w", encoding="utf-8") as f:
-                 f.write(r.text)
-            print("Client secret baixado com sucesso.")
-        except requests.exceptions.Timeout:
-             showerror("Erro de Rede", f"Tempo esgotado ao tentar baixar {os.path.basename(CLIENT_SECRET_LOCAL_FILE)}.")
-             raise Exception("Timeout ao baixar client_secret.")
+            r = requests.get(url)
+            r.raise_for_status() # Lança exceção para códigos de status ruins
+            with open(nome_local, "w", encoding="utf-8") as f:
+                f.write(r.text)
+            print(f"'{nome_local}' baixado com sucesso.")
         except requests.exceptions.RequestException as e:
-             showerror("Erro de Rede", f"Não foi possível baixar o {os.path.basename(CLIENT_SECRET_LOCAL_FILE)}:\n{e}")
              raise Exception(f"Erro ao baixar o client_secret.json: {e}")
-    return CLIENT_SECRET_LOCAL_FILE
+        except IOError as e:
+             raise Exception(f"Erro ao salvar o client_secret.json: {e}")
+
+    return nome_local
 
 def get_gdrive_service():
-    """Autentica (ou usa token salvo) e retorna o serviço do Google Drive."""
+    """Autentica e retorna o serviço do Google Drive com base no client_secret remoto."""
     creds = None
-    client_secret_file = None
     try:
-        client_secret_file = baixar_client_secret_remoto()
+        CLIENT_SECRET_FILE = baixar_client_secret_remoto()
     except Exception as e:
-        # showerror é chamado dentro da função baixar_...
-        print(f"Falha crítica ao obter client_secret: {e}")
-        return None # Não pode continuar sem client secret
+        showerror("Erro de Configuração", str(e))
+        return None
 
-    # Tenta carregar token existente
+    TOKEN_FILE = 'token.json'
+
+    # Tenta carregar o token salvo anteriormente
     if os.path.exists(TOKEN_FILE):
         try:
             with open(TOKEN_FILE, 'rb') as token:
                 creds = pickle.load(token)
-            print("Token local carregado.")
-        except (pickle.UnpicklingError, EOFError, FileNotFoundError, Exception) as e:
-             print(f"Erro ao carregar token ({e}). Removendo arquivo token corrompido/inválido.")
-             try: os.remove(TOKEN_FILE)
-             except OSError: pass
+        except (EOFError, pickle.UnpicklingError, FileNotFoundError): # Lidar com erros potenciais ao carregar o token
              creds = None
 
-    # Valida credenciais ou re-autentica
+
+    # Se não houver token ou ele for inválido/expirado, roda o fluxo de autenticação
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            print("Token expirado, tentando renovar...")
             try:
                 creds.refresh(Request())
-                print("Token renovado com sucesso.")
-                try: # Salva token renovado
-                    with open(TOKEN_FILE, 'wb') as token: pickle.dump(creds, token)
-                except Exception as e: print(f"Aviso: Não foi possível salvar token renovado: {e}")
             except Exception as e:
-                print(f"Erro ao renovar token: {e}. Reautenticando...")
-                if os.path.exists(TOKEN_FILE):
-                    try: os.remove(TOKEN_FILE); print("Token antigo removido.")
-                    except OSError: pass
-                creds = None # Força re-autenticação
-        else: creds = None # Garante que creds seja None se não for válido e não puder renovar
-
-        if not creds: # Se ainda não tem credencial válida, roda o fluxo
-             print("Nenhuma credencial válida encontrada. Iniciando fluxo de autenticação...")
-             try:
-                flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
-                creds = flow.run_local_server(port=0, open_browser=True)
-                print("Autenticação bem-sucedida.")
-                try: # Salva novas credenciais
-                    with open(TOKEN_FILE, 'wb') as token: pickle.dump(creds, token)
-                    print(f"Novas credenciais salvas em {TOKEN_FILE}.")
-                except Exception as e: print(f"Aviso: Não foi possível salvar o novo {os.path.basename(TOKEN_FILE)}: {e}")
-             except FileNotFoundError:
-                 showerror("Erro de Autenticação", f"Arquivo '{os.path.basename(client_secret_file)}' não encontrado durante a autenticação.")
+                print(f"Erro ao renovar token: {e}")
+                creds = None # Forçar re-autenticação se a renovação falhar
+        if not creds or not creds.valid:
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+                creds = flow.run_local_server(port=0)
+            except FileNotFoundError:
+                 showerror("Erro de Autenticação", f"Arquivo client_secret não encontrado: {CLIENT_SECRET_FILE}")
                  return None
-             except ImportError:
-                  showerror("Erro de Autenticação", "Erro ao importar módulos necessários para autenticação web. Verifique as dependências.")
-                  return None
-             except Exception as e:
-                 showerror("Erro de Autenticação", f"Falha durante o fluxo de autenticação:\n{e}")
+            except Exception as e:
+                 showerror("Erro de Autenticação", f"Erro durante o fluxo de autenticação: {e}")
                  return None
 
-    # Constrói e retorna o serviço
+
+        # Salva o token local para reutilização
+        try:
+            with open(TOKEN_FILE, 'wb') as token:
+                pickle.dump(creds, token)
+        except IOError as e:
+            print(f"Warning: Could not save token file: {e}")
+
+
+    # Constrói o serviço Google Drive autenticado
     try:
         service = build('drive', 'v3', credentials=creds)
-        print("Serviço Google Drive construído com sucesso.")
         return service
     except Exception as e:
-        showerror("Erro Google API", f"Falha ao construir serviço Google Drive:\n{e}")
+        showerror("Erro do Google Drive", f"Falha ao construir o serviço Google Drive: {e}")
         return None
+
 
 def upload_pptx_and_export_to_pdf(local_pptx_path):
-    """Faz upload do PPTX para o Google Drive (como Google Slides) e exporta como PDF."""
+    """
+    Faz upload do .pptx convertendo em Google Slides,
+    e baixa PDF local trocando .pptx -> .pdf
+    """
     if not os.path.exists(local_pptx_path):
-        showerror("Erro", f"Arquivo '{os.path.basename(local_pptx_path)}' não encontrado para upload.")
-        return None # Retorna None para indicar falha
+        showerror("Erro", f"Arquivo {local_pptx_path} não foi encontrado.")
+        return
 
     service = get_gdrive_service()
-    if not service:
-        # showerror já foi chamado em get_gdrive_service
-        print("Falha ao obter serviço Google Drive.")
-        return None # Retorna None
+    if service is None:
+        return # Sair se o serviço não puder ser obtido
 
     pdf_output_name = local_pptx_path.replace(".pptx", ".pdf")
-    base_name = os.path.basename(local_pptx_path)
-    file_id = None
+
+    uploaded_file_id = None # Manter controle do ID do arquivo enviado para limpeza
 
     try:
-        print(f"Iniciando upload de '{base_name}' para o Google Drive...")
-        file_metadata = {'name': base_name, 'mimeType': 'application/vnd.google-apps.presentation'}
-        media = MediaFileUpload(local_pptx_path,
-                                mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                                resumable=True)
-        uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        file_id = uploaded_file.get('id')
-        if not file_id: raise Exception("Falha no upload (ID do arquivo não retornado).")
-        print(f"Upload concluído. ID: {file_id}. Exportando para PDF...")
+        # 1) Upload (convertendo)
+        file_metadata = {
+            'name': os.path.basename(local_pptx_path),
+            'mimeType': 'application/vnd.google-apps.presentation'
+        }
+        media = MediaFileUpload(
+            local_pptx_path,
+            mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            resumable=True
+        )
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        uploaded_file_id = uploaded_file.get('id')
+        print(f"Arquivo '{local_pptx_path}' enviado como Google Slides. ID: {uploaded_file_id}")
 
-        request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
+        # 2) Exportar para PDF
+        request = service.files().export_media(fileId=uploaded_file_id, mimeType='application/pdf')
         fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request); done = False
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
         while not done:
             status, done = downloader.next_chunk()
-            # if status: print(f"Download PDF: {int(status.progress() * 100)}%") # Opcional: barra de progresso
-        with open(pdf_output_name, 'wb') as f: f.write(fh.getvalue())
-        print(f"PDF gerado: '{os.path.basename(pdf_output_name)}'.")
-        showinfo("Google Drive", f"PDF gerado com sucesso:\n'{os.path.basename(pdf_output_name)}'.")
-        return pdf_output_name
+            if status:
+                print(f"Progresso PDF: {int(status.progress() * 100)}%")
+
+        with open(pdf_output_name, 'wb') as f:
+            f.write(fh.getvalue())
+
+        showinfo("Google Drive", f"PDF gerado localmente: '{pdf_output_name}'")
 
     except Exception as e:
-        showerror("Erro Google Drive", f"Erro durante o processo de upload/conversão para PDF:\n{e}")
-        return None
+        showerror("Erro ao gerar PDF", f"Falha ao processar arquivo no Google Drive: {e}")
+
     finally:
-        if file_id and service: # Garante que service existe
+        # Limpar o arquivo Google Slides enviado
+        if uploaded_file_id:
             try:
-                print(f"Deletando arquivo temporário do Drive (ID: {file_id})...")
-                service.files().delete(fileId=file_id).execute()
-                print("Arquivo temporário deletado.")
-            except Exception as delete_err:
-                print(f"Aviso: Falha ao deletar arquivo temporário do Drive: {delete_err}")
+                service.files().delete(fileId=uploaded_file_id).execute()
+                print(f"Arquivo temporário {uploaded_file_id} excluído do Google Drive.")
+            except Exception as e:
+                print(f"Warning: Could not delete temporary Google Drive file {uploaded_file_id}: {e}")
 
 
-# --- MainApp (Interface Gráfica Principal) ---
+# ---------------------------------------------------------
+# MainApp (Mantida)
+# ---------------------------------------------------------
 class MainApp(ttkb.Window):
     def __init__(self):
         super().__init__(themename="litera")
-        self.title("Gerador de Propostas ConnectPlug v2.3 - Corrigido") # Versão
-        self.geometry("1200x850")
-        self.resizable(True, True)
+        self.title("Gerador de Propostas e Materiais ConnectPlug") # Título atualizado
+        self.geometry("1200x800")
 
         self.nome_closer_var = tk.StringVar()
         self.celular_closer_var = tk.StringVar()
         self.email_closer_var = tk.StringVar()
-        self.nome_cliente_var_shared = tk.StringVar(value="")
-        self.validade_proposta_var_shared = tk.StringVar(value=date.today().strftime("%d/%m/%Y"))
+
+        # Variáveis compartilhadas para TODAS as abas
+        self.nome_cliente_var_shared = tk.StringVar(value="Nome do Cliente") # Placeholder padrão
+        self.validade_proposta_var_shared = tk.StringVar(value="DD/MM/YYYY") # Placeholder padrão
 
         carregar_config(self.nome_closer_var, self.celular_closer_var, self.email_closer_var)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # --- Layout Principal ---
-        top_bar = ttkb.Frame(self, padding=5)
-        top_bar.pack(side="top", fill="x")
-        ttkb.Label(top_bar, text="Vendedor:").pack(side="left", padx=(0, 2))
-        ttkb.Entry(top_bar, textvariable=self.nome_closer_var, width=20).pack(side="left", padx=(0, 10))
-        ttkb.Label(top_bar, text="Celular:").pack(side="left", padx=(0, 2))
-        ttkb.Entry(top_bar, textvariable=self.celular_closer_var, width=15).pack(side="left", padx=(0, 10))
-        ttkb.Label(top_bar, text="Email:").pack(side="left", padx=(0, 2))
-        ttkb.Entry(top_bar, textvariable=self.email_closer_var, width=25).pack(side="left", padx=(0, 10))
-        self.btn_add = ttkb.Button(top_bar, text="+ Nova Aba", command=self.add_aba, bootstyle="success")
-        self.btn_add.pack(side="left", padx=(20, 5))
+        # Barra superior
+        top_bar = ttkb.Frame(self)
+        top_bar.pack(side="top", fill="x", pady=5)
 
-        self.notebook = ttkb.Notebook(self, padding=5)
-        self.notebook.pack(fill="both", expand=True, pady=5)
+        ttkb.Label(top_bar, text="Vendedor:").pack(side="left", padx=5)
+        ttkb.Entry(top_bar, textvariable=self.nome_closer_var, width=15).pack(side="left", padx=5)
+        ttkb.Label(top_bar, text="Cel:").pack(side="left", padx=5)
+        ttkb.Entry(top_bar, textvariable=self.celular_closer_var, width=15).pack(side="left", padx=5)
+        ttkb.Label(top_bar, text="Email:").pack(side="left", padx=5)
+        ttkb.Entry(top_bar, textvariable=self.email_closer_var, width=20).pack(side="left", padx=5)
 
-        bot_frame = ttkb.Frame(self, padding=10)
-        bot_frame.pack(side="bottom", fill="x")
-        ttkb.Button(bot_frame, text="Gerar Proposta + PDF", command=self.on_gerar_proposta, bootstyle="primary").pack(side="left", padx=5)
-        ttkb.Button(bot_frame, text="Gerar Material + PDF", command=self.on_gerar_mat_tecnico, bootstyle="info").pack(side="left", padx=5)
-        ttkb.Button(bot_frame, text="Gerar TUDO + PDF", command=self.on_gerar_tudo, bootstyle="secondary").pack(side="left", padx=5)
+        self.btn_add = ttkb.Button(top_bar, text="+ Nova Aba", command=self.add_aba)
+        self.btn_add.pack(side="right", padx=5)
 
-        # --- Inicialização ---
+        self.notebook = ttkb.Notebook(self)
+        self.notebook.pack(fill="both", expand=True)
+
+        bot_frame = ttkb.Frame(self)
+        bot_frame.pack(side="bottom", fill="x", pady=5)
+
+        # Botões unificados (gera .pptx e PDF)
+        ttkb.Button(bot_frame, text="Gerar Proposta + PDF", command=self.on_gerar_proposta).pack(side="left", padx=5)
+        ttkb.Button(bot_frame, text="Gerar Material + PDF", command=self.on_gerar_mat_tecnico).pack(side="left", padx=5)
+        ttkb.Button(bot_frame, text="Gerar TUDO + PDF", command=self.on_gerar_tudo).pack(side="left", padx=5)
+
         self.abas_criadas = {}
         self.ultimo_indice = 0
-        self.add_aba()
-        self.after(100, self.baixar_templates_necessarios)
 
-    def baixar_templates_necessarios(self):
-         print("Verificando templates PPTX...")
-         try:
-            # Passa o diretório do script para salvar os templates lá
-            baixar_arquivo_if_needed(os.path.join(script_dir,"Proposta Comercial ConnectPlug.pptx"), "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Proposta%20Comercial%20ConnectPlug.pptx")
-            baixar_arquivo_if_needed(os.path.join(script_dir,"Material Tecnico ConnectPlug.pptx"), "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Material%20Tecnico%20ConnectPlug.pptx")
-         except Exception as e:
-             print(f"Erro ao baixar templates: {e}")
+        # Cria ao menos 1 aba no começo
+        self.add_aba()
+
+        # Baixar arquivos de modelo se necessário
+        baixar_arquivo_if_needed(
+            "Proposta Comercial ConnectPlug.pptx",
+            "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Proposta%20Comercial%20ConnectPlug.pptx"
+        )
+        baixar_arquivo_if_needed(
+            "Material Tecnico ConnectPlug.pptx",
+            "https://github.com/DevRGS/Gerador/raw/refs/heads/main/assets/Material%20Tecnico%20ConnectPlug.pptx"
+        )
+
 
     def on_close(self):
-        print("Salvando configuração do vendedor...")
-        salvar_config(self.nome_closer_var.get(), self.celular_closer_var.get(), self.email_closer_var.get())
-        print("Fechando aplicação.")
+        salvar_config(
+            self.nome_closer_var.get(),
+            self.celular_closer_var.get(),
+            self.email_closer_var.get()
+        )
         self.destroy()
+
 
     def add_aba(self):
         if len(self.abas_criadas) >= MAX_ABAS:
-            showinfo("Limite Atingido", f"Máximo de {MAX_ABAS} abas.")
+            showinfo("Limite de Abas", f"O número máximo de abas ({MAX_ABAS}) foi atingido.")
             return
-        self.ultimo_indice += 1; idx = self.ultimo_indice
-        print(f"Adicionando Aba Plano {idx}...")
-        frame_aba = PlanoFrame(self.notebook, idx, self.nome_cliente_var_shared, self.validade_proposta_var_shared, self.fechar_aba)
-        self.notebook.add(frame_aba, text=f"Plano {idx}")
+        self.ultimo_indice += 1
+        idx = self.ultimo_indice
+        frame_aba = PlanoFrame(
+            self.notebook,
+            idx,
+            nome_cliente_var_shared=self.nome_cliente_var_shared,
+            validade_proposta_var_shared=self.validade_proposta_var_shared,
+            on_close_callback=self.fechar_aba
+        )
+        self.notebook.add(frame_aba, text=f"Aba {idx}")
         self.abas_criadas[idx] = frame_aba
-        self.notebook.select(frame_aba)
-        if len(self.abas_criadas) >= MAX_ABAS: self.btn_add.config(state="disabled")
+        self.notebook.select(frame_aba) # Mudar para a nova aba
+
 
     def fechar_aba(self, indice):
         if indice in self.abas_criadas:
             frame_aba = self.abas_criadas[indice]
-            try:
-                print(f"Fechando Aba Plano {indice}...")
-                self.notebook.forget(frame_aba)
-                del self.abas_criadas[indice]
-            except tk.TclError as e:
-                 print(f"Erro ao tentar fechar aba {indice}: {e}")
-                 if indice in self.abas_criadas: del self.abas_criadas[indice]
-            if len(self.abas_criadas) < MAX_ABAS: self.btn_add.config(state="normal")
-            if not self.abas_criadas: self.add_aba()
-        else: print(f"Aviso: Tentativa de fechar aba inválida: {indice}")
+            self.notebook.forget(frame_aba)
+            del self.abas_criadas[indice]
+
+            # Se não sobrar nenhuma aba, adicionar uma nova
+            if not self.abas_criadas:
+                self.add_aba()
+
 
     def get_abas_ativas(self):
-        indices_ativos = sorted(self.abas_criadas.keys())
-        return [self.abas_criadas[idx] for idx in indices_ativos]
-
-    def _validar_dados_basicos(self):
-        erros = []
-        if not self.nome_closer_var.get(): erros.append("Nome do Vendedor")
-        if not self.celular_closer_var.get(): erros.append("Celular do Vendedor")
-        if not self.email_closer_var.get(): erros.append("Email do Vendedor")
-        if not self.nome_cliente_var_shared.get(): erros.append("Nome do Cliente")
-        if erros:
-            msg_erro = "Preencha os seguintes campos:\n- " + "\n- ".join(erros)
-            showerror("Dados Incompletos", msg_erro)
-            return False
-        return True
-
-    def _executar_geracao_e_pdf(self, funcao_geracao_pptx, *args):
-         pptx_file = funcao_geracao_pptx(*args)
-         pdf_file = None
-         if pptx_file and os.path.exists(pptx_file):
-             try:
-                 pdf_file = upload_pptx_and_export_to_pdf(pptx_file)
-             except Exception as e:
-                  print(f"Erro ao gerar PDF para '{os.path.basename(pptx_file)}': {e}")
-                  # showerror já é chamado dentro de upload...
-         return pptx_file, pdf_file
+        # Retorna as abas ordenadas pelo índice
+        return [self.abas_criadas[k] for k in sorted(self.abas_criadas.keys())]
 
     def on_gerar_proposta(self):
+        """Gera Proposta (.pptx) e em seguida converte em PDF."""
         abas_ativas = self.get_abas_ativas()
-        if not abas_ativas: showerror("Erro", "Nenhuma aba ativa."); return
-        if not self._validar_dados_basicos(): return
-        print("Gerando Proposta Comercial...")
-        self._executar_geracao_e_pdf(gerar_proposta, abas_ativas, self.nome_closer_var.get(), self.celular_closer_var.get(), self.email_closer_var.get())
-        print("Processo de Proposta concluído.")
+        if not abas_ativas:
+            showerror("Erro", "Nenhuma aba criada para gerar Proposta.")
+            return
+        pptx_file = gerar_proposta(
+            abas_ativas,
+            self.nome_closer_var.get(),
+            self.celular_closer_var.get(),
+            self.email_closer_var.get()
+        )
+        if pptx_file and os.path.exists(pptx_file):
+            # Executar upload em um thread separado se demorar, mas por simplicidade manter aqui por enquanto
+            upload_pptx_and_export_to_pdf(pptx_file)
 
     def on_gerar_mat_tecnico(self):
+        """Gera Material Técnico (.pptx) e em seguida converte em PDF."""
         abas_ativas = self.get_abas_ativas()
-        if not abas_ativas: showerror("Erro", "Nenhuma aba ativa."); return
-        if not self._validar_dados_basicos(): return
-        print("Gerando Material Técnico...")
-        self._executar_geracao_e_pdf(gerar_material, abas_ativas, self.nome_closer_var.get(), self.celular_closer_var.get(), self.email_closer_var.get())
-        print("Processo de Material Técnico concluído.")
+        if not abas_ativas:
+            showerror("Erro", "Nenhuma aba criada para gerar Material Técnico.")
+            return
+        pptx_file = gerar_material(
+            abas_ativas,
+            self.nome_closer_var.get(),
+            self.celular_closer_var.get(),
+            self.email_closer_var.get()
+        )
+        if pptx_file and os.path.exists(pptx_file):
+             # Executar upload em um thread separado se demorar
+             upload_pptx_and_export_to_pdf(pptx_file)
 
     def on_gerar_tudo(self):
+        """Gera Proposta e Material Técnico, cada um em .pptx, depois converte em PDF."""
         abas_ativas = self.get_abas_ativas()
-        if not abas_ativas: showerror("Erro", "Nenhuma aba ativa."); return
-        if not self._validar_dados_basicos(): return
-        print("--- Gerando TUDO ---")
-        print("\n[1/2] Gerando Proposta...")
-        _, pdf_prop = self._executar_geracao_e_pdf(gerar_proposta, abas_ativas, self.nome_closer_var.get(), self.celular_closer_var.get(), self.email_closer_var.get())
-        print("\n[2/2] Gerando Material Técnico...")
-        _, pdf_mat = self._executar_geracao_e_pdf(gerar_material, abas_ativas, self.nome_closer_var.get(), self.celular_closer_var.get(), self.email_closer_var.get())
-        print("\n--- Geração Concluída ---")
-        if pdf_prop and pdf_mat: showinfo("Concluído", "Proposta e Material (PPTX e PDF) gerados.")
-        else: showinfo("Concluído com Alertas", "Geração concluída, mas pode ter ocorrido falha na criação de PDF(s). Verifique o console.")
+        if not abas_ativas:
+            showerror("Erro", "Nenhuma aba criada para gerar.")
+            return
+
+        # 1) Gera Proposta
+        pptx_prop = gerar_proposta(
+            abas_ativas,
+            self.nome_closer_var.get(),
+            self.celular_closer_var.get(),
+            self.email_closer_var.get()
+        )
+        if pptx_prop and os.path.exists(pptx_prop):
+            upload_pptx_and_export_to_pdf(pptx_prop)
+
+        # 2) Gera Material
+        pptx_mat = gerar_material(
+            abas_ativas,
+            self.nome_closer_var.get(),
+            self.celular_closer_var.get(),
+            self.email_closer_var.get()
+        )
+        if pptx_mat and os.path.exists(pptx_mat):
+            upload_pptx_and_export_to_pdf(pptx_mat)
 
 
-# --- Função Principal (Execução) ---
 def main():
-    print("Iniciando Gerador de Propostas...")
-    # Adiciona verificação inicial de dependências antes de criar a janela principal
-    modulos_faltando = []
-    for modulo, pacote in dependencias.items():
-        try:
-            importlib.import_module(modulo)
-        except ImportError:
-            modulos_faltando.append(pacote)
-
-    if modulos_faltando:
-         root = tk.Tk(); root.withdraw() # Janela temporária para showerror
-         showerror("Dependências Faltando", f"Os seguintes pacotes Python são necessários e não foram encontrados:\n- {'\n- '.join(modulos_faltando)}\n\nPor favor, instale-os (ex: pip install {' '.join(modulos_faltando)}) e tente novamente.")
-         root.destroy()
-         return # Sai se faltar dependência crítica
-
     app = MainApp()
     app.mainloop()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\nERRO NÃO TRATADO NA APLICAÇÃO:\n{'-'*30}\n {type(e).__name__}: {e}\n{'-'*30}")
-        import traceback
-        traceback.print_exc() # Imprime traceback completo no console
-        try: # Tenta mostrar erro na UI
-            root = tk.Tk(); root.withdraw()
-            showerror("Erro Crítico", f"Erro inesperado:\n{type(e).__name__}: {e}")
-            root.destroy()
-        except Exception: pass
-        sys.exit(1)
+    main()
