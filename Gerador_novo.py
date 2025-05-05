@@ -451,49 +451,52 @@ class PlanoFrame(ttkb.Frame):
         # Módulos Dinâmicos (Layout Checkbox + Spinbox)
         frame_mod = ttkb.Labelframe(self.frame_left, text="Outros Módulos")
         frame_mod.pack(fill="both", expand=True, pady=5)
+
+        # **FIX:** Use pack for the main grid frame, and pack for column frames
         f_mod_grid = ttkb.Frame(frame_mod)
-        f_mod_grid.pack(fill="both", expand=True, padx=5, pady=5)
+        f_mod_grid.pack(fill="both", expand=True, padx=5, pady=5) # Use pack here
 
-        # Criar Checkbox e Spinbox para cada módulo quantificável
-        num_columns = 2 # Ou 3, dependendo do espaço
-        col_widgets = [[] for _ in range(num_columns)] # Lista de listas para armazenar widgets por coluna
+        # Create column frames and pack them side-by-side within f_mod_grid
+        num_columns = 2 # Or 3, depending on space
+        column_frames = []
+        col_widgets = [[] for _ in range(num_columns)] # List of lists to hold widgets per column
 
-        for i, module_name in enumerate(sorted(self.quantifiable_modules)): # Ordenar para ordem consistente
-            mod_frame = ttkb.Frame(f_mod_grid)
+        for col_idx in range(num_columns):
+            col_frame = ttkb.Frame(f_mod_grid)
+            col_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5) # Pack column frames
+            column_frames.append(col_frame)
 
-            # Label do Nome do Módulo
+        # Create Checkbox and Spinbox for each quantifiable module
+        # Arrange in columns
+        for i, module_name in enumerate(sorted(self.quantifiable_modules)): # Sort for consistent order
+            # Create a small frame for each module row, parented by the correct column frame
+            col_idx = i % num_columns
+            mod_frame = ttkb.Frame(column_frames[col_idx]) # Parented by the column frame
+
+            # Module Name Label
             ttkb.Label(mod_frame, text=module_name).pack(side="left", padx=(0, 5))
 
-            # Checkbox (reflete spinbox > 0, permite alternar)
-            # Usar uma variável booleana separada para o estado do checkbox
-            check_var = tk.BooleanVar(value=False)
+            # Checkbox (reflects spinbox > 0, allows toggling)
+            check_var = tk.BooleanVar(value=False) # New boolean var for check state
             cb = ttk.Checkbutton(mod_frame, variable=check_var)
             cb.pack(side="left")
 
-            # Spinbox (controla a quantidade)
+            # Spinbox (controls quantity)
             spin_var = self.module_quantities[module_name]
-            sp = ttkb.Spinbox(mod_frame, from_=0, to=999, textvariable=spin_var, width=5) # Quantidade máxima 999? Ajustar se necessário
+            sp = ttkb.Spinbox(mod_frame, from_=0, to=999, textvariable=spin_var, width=5) # Max quantity 999? Ajustar se necessário
             sp.pack(side="left", padx=(5, 0))
 
-            # Armazenar widgets e ligar checkbox/spinbox
+            # Store widgets and link checkbox/spinbox
             self.module_widgets[module_name] = {'check': cb, 'spin': sp, 'check_var': check_var, 'spin_var': spin_var, 'frame': mod_frame}
 
-            # Ligar a mudança do spinbox para atualizar o checkbox e os valores gerais
+            # Link spinbox change to update checkbox and overall values
             spin_var.trace_add("write", lambda name, index, mode, m=module_name: self.on_module_quantity_change(m))
-            # Ligar o clique do checkbox para atualizar o spinbox e os valores gerais
+            # Link checkbox click to update spinbox and overall values
             # Usar trace 'write' na variável booleana
             check_var.trace_add("write", lambda name, index, mode, m=module_name: self.on_module_check_change(m))
 
-            # Adicionar à lista da coluna apropriada
-            col_widgets[i % num_columns].append(mod_frame)
-
-        # Posicionar os frames das colunas no frame da grade
-        for col_idx in range(num_columns):
-             col_frame = ttkb.Frame(f_mod_grid)
-             col_frame.grid(row=0, column=col_idx, sticky="nsew", padx=5, pady=5)
-             f_mod_grid.columnconfigure(col_idx, weight=1)
-             for r, mod_frame in enumerate(col_widgets[col_idx]):
-                 mod_frame.pack(anchor="w", pady=1) # Empacotar dentro do frame da coluna
+            # Pack the module frame within its column frame
+            mod_frame.pack(anchor="w", pady=1) # Pack within the column frame, stacked vertically
 
 
         # Seção de Entrada de Dados (mantida)
@@ -731,7 +734,7 @@ class PlanoFrame(ttkb.Frame):
         self.valor_anual_editavel.set("0,00")
         self.desconto_personalizado.set("0")
 
-        # Chamar atualizar_valores no final para atualizar cálculos e estado da UI
+        # Call atualizar_valores at the end to update calculations and UI state
         self.atualizar_valores()
 
     def atualizar_valores(self, *args):
@@ -959,7 +962,7 @@ class PlanoFrame(ttkb.Frame):
         ]
         for fixed_mod in fixed_no_price_modules:
              if fixed_mod in mandatory and fixed_mod not in linhas: # Evitar adicionar duplicatas
-                  linhas.append(fixed_mod)
+                 linhas.append(fixed_mod)
 
 
         unique_mods = []
@@ -1213,11 +1216,10 @@ def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
             "Relatórios",
             "Suporte Técnico - Via chat",
             # Relatório KDS está incluído como quantificável agora, mas também pode ser fixo
-            "PDV - Frente de Caixa", # Nome da funcionalidade
-            "Usuários", # Nome da funcionalidade
-            "Smart TEF", # Nome da funcionalidade
-             "Vendas - Estoque - Financeiro" # Nome da funcionalidade
-            # Notas Fiscais são tratadas via checkboxes dedicados
+            "PDV - Frente de Caixa", # Nome da funcionalidade (quantidade base lidada pelo spinbox de PDVs)
+            "Usuários", # Nome da funcionalidade (quantidade base lidada pelo spinbox de Usuários)
+            "Smart TEF", # Nome da funcionalidade (quantidade base lidada pelo spinbox de Smart TEF)
+            "Vendas - Estoque - Financeiro" # Fixo em planos antigos, mantido no mandatory do Bling
         ]
         for fixed_mod in fixed_no_price_modules_in_list:
              if fixed_mod in mandatory_list:
@@ -1343,18 +1345,30 @@ def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
             prs.part.drop_rel(rid)
             del prs.slides._sldIdLst[idx]
 
-    # ---------------------------------------------------
-    # 5) Substituir placeholders (dados globais) - Manter lógica
-    # ---------------------------------------------------
+    # 5) Re-mapear índices - Manter lógica
+    sorted_kept = sorted(list(keep_slides)) # Converter para lista antes de ordenar
+    new_order_map = {}
+    # Ajustar a iteração sobre slides após remoção
+    for new_idx, slide in enumerate(prs.slides):
+        # Encontrar o índice original deste slide
+        # Isso requer comparar o slide atual com os slides originais antes da remoção
+        # Ou, mais simples, usar o new_idx e sorted_kept para encontrar o old_idx correspondente
+        if new_idx < len(sorted_kept): # Verificar limite para evitar IndexError
+             old_idx = sorted_kept[new_idx]
+             if old_idx in slide_map_aba: # Garantir que o old_idx estava no mapa
+                 new_order_map[new_idx] = slide_map_aba[old_idx]
+             else:
+                 new_order_map[new_idx] = None # Slide genérico ou não mapeado
+
+
+    # 6) Substituir placeholders (dados globais) - Manter lógica
     fallback_aba = lista_abas[0]
     d_fallback = fallback_aba.gerar_dados_proposta(nome_closer, celular_closer, email_closer)
 
     for slide in prs.slides:
         substituir_placeholders_no_slide(slide, d_fallback)
 
-    # ---------------------------------------------------
-    # 6) Salvar pptx final - Manter lógica
-    # ---------------------------------------------------
+    # 7) Salvar pptx final - Manter lógica
     nome_cliente_primeira = d_fallback.get("nome_cliente", "SemNome")
     hoje_str = date.today().strftime("%d-%m-%Y")
     nome_arquivo = f"Material Tecnico ConnectPlug - {nome_cliente_primeira} - {hoje_str}.pptx"
@@ -1366,7 +1380,6 @@ def gerar_material(lista_abas, nome_closer, celular_closer, email_closer):
     except Exception as e:
         showerror("Erro", f"Falha ao salvar: {e}")
         return None
-
 
 
 # ---------------------------------------------------------
