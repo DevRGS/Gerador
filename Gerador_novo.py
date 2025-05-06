@@ -126,6 +126,7 @@ PLAN_INFO = {
             "Suporte Técnico - Via chat", "Delivery", "Relatório KDS", "Painel Senha TV"
         ]
     },
+    
     "Plano Performance": {  # Antigo "Completo"
         "base_anual": 499.00,
         "base_mensal": 499.00 * 1.1,  # Base anual * 1.1
