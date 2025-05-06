@@ -126,7 +126,7 @@ PLAN_INFO = {
             "Suporte Técnico - Via chat", "Delivery", "Relatório KDS", "Painel Senha TV"
         ]
     },
-    
+
     "Plano Performance": {  # Antigo "Completo"
         "base_anual": 499.00,
         "base_mensal": 499.00 * 1.1,  # Base anual * 1.1
@@ -276,7 +276,7 @@ class PlanoFrame(ttkb.Frame):
         self.validade_proposta_var = validade_proposta_var_shared
         self.nome_plano_var = tk.StringVar(value="") # ← Nome do plano
 
-        self.current_plan = "Personalizado"
+        self.current_plan = "Plano PDV"
         self.spin_pdv_var = tk.IntVar(value=1)
         self.spin_users_var = tk.IntVar(value=1)
         self.spin_auto_var = tk.IntVar(value=0)
@@ -324,7 +324,7 @@ class PlanoFrame(ttkb.Frame):
 
         self._montar_layout_esquerda()
         self._montar_layout_direita()
-        self.configurar_plano("Personalizado")
+        self.configurar_plano("Plano PDV")
 
     def fechar_aba(self):
         if self.on_close_callback:
