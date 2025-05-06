@@ -782,7 +782,7 @@ class PlanoFrame(ttkb.Frame):
         if pdv_val > 0:
             inc.append(f"{pdv_val} PDVs")
             # Adiciona "Usuário Cortesia" para PDVs extras em planos específicos
-            if self.current_plan in ["Personalizado", "Ideal", "Completo"]:
+            if self.current_plan in ["Plano PDV", "Plano Gestão", "Plano Performance"]:
                 min_pdv = PLAN_INFO[self.current_plan]["min_pdv"]
                 pdv_extras = max(0, pdv_val - min_pdv)
                 if pdv_extras > 0:
