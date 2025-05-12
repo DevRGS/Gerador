@@ -105,42 +105,33 @@ def salvar_config(nome_closer, celular_closer, email_closer):
 # Dados de Planos e Tabelas de Preço
 # ---------------------------------------------------------
 PLAN_INFO = {
-    "Plano PDV": {  # Antigo "Personalizado"
-        "base_anual": 99.00,
-        "base_mensal": 99.00 * 1.1,  # Base anual * 1.1
+    "Personalizado": {
+        "base_mensal": 189.90,
+        "base_anual": 170.91,
         "min_pdv": 1,
         "min_users": 2,
-        "mandatory": [
-            "PDV - Frente de Caixa", "30 Notas Fiscais", "Suporte Técnico - Via chamados",
-            "Relatório Básico"
-        ]
+        "mandatory": ["Relatórios","Vendas - Estoque - Financeiro"]
     },
-    "Plano Gestão": {  # Antigo "Ideal"
-        "base_anual": 199.00,
-        "base_mensal": 199.00 * 1.1,  # Base anual * 1.1
-        "min_pdv": 2,
-        "min_users": 3,
-        "mandatory": [
-            "Notas Fiscais Ilimitadas", "Importação de XML", "PDV - Frente de Caixa",
-            "Estoque em Grade", "Relatórios", "Suporte Técnico - Via chamados",
-            "Suporte Técnico - Via chat", "Delivery", "Relatório KDS", "Painel Senha TV"
-        ]
-    },
-
-    "Plano Performance": {  # Antigo "Completo"
-        "base_anual": 499.00,
-        "base_mensal": 499.00 * 1.1,  # Base anual * 1.1
-        "min_pdv": 3,
+    "Ideal": {
+        "base_mensal": 359.90,
+        "base_anual": 323.91,
+        "min_pdv": 1,
         "min_users": 5,
         "mandatory": [
-            "Produção", "Promoções", "Notas Fiscais Ilimitadas", "Importação de XML",
-            "Hub de Delivery", "Ordem de Serviço", "Delivery", "App Gestão CPlug",
-            "Relatório KDS", "Painel Senha TV", "Painel Senha Mobile", "Controle de Mesas",
-            "Estoque em Grade", "Marketing", "Relatórios", "Relatório Dinâmico",
-            "Atualização em tempo real", "Facilita NFE", "Conciliação Bancária",
-            "Contratos de cartões e outros", "Suporte Técnico - Via chamados",
-            "Suporte Técnico - Via chat", "Suporte Técnico - Estendido", "PDV - Frente de Caixa",
-            "Smart TEF"
+            "3000 Notas Fiscais","Relatórios","Vendas - Estoque - Financeiro",
+            "Estoque em Grade","Importação de XML","Produção"
+        ]
+    },
+    "Completo": {
+        "base_mensal": 549.90,
+        "base_anual": 494.91,
+        "min_pdv": 2,
+        "min_users": 10,
+        "mandatory": [
+            "Conciliação Bancária","Contratos de cartões e outros","Controle de Mesas",
+            "Delivery","Estoque em Grade","Facilita NFE","Importação de XML",
+            "Notas Fiscais Ilimitadas","Ordem de Serviço","Produção","Relatório Dinâmico",
+            "Relatórios","Vendas - Estoque - Financeiro"
         ]
     },
     "Autoatendimento": {
@@ -149,8 +140,8 @@ PLAN_INFO = {
         "min_pdv": 0,
         "min_users": 1,
         "mandatory": [
-            "Contratos de cartões e outros", "Estoque em Grade", "Notas Fiscais Ilimitadas",
-            "Produção", "Vendas - Estoque - Financeiro"
+            "Contratos de cartões e outros","Estoque em Grade","Notas Fiscais Ilimitadas",
+            "Produção","Vendas - Estoque - Financeiro"
         ]
     },
     "Bling": {
@@ -165,14 +156,15 @@ PLAN_INFO = {
         ]
     },
     "Em Branco": {
-        "base_mensal": 0.0,
-        "base_anual": 0.0,
-        "min_pdv": 0,
-        "min_users": 0,
-        "mandatory": []
+        "base_mensal": 0.0,  # Defina o valor base desejado
+        "base_anual": 0.0,   # Defina o valor base desejado
+        "min_pdv": 0,        # Defina o mínimo de PDVs desejado
+        "min_users": 0,      # Defina o mínimo de usuários desejado
+        "mandatory": [
+            # Lista vazia, como solicitado
+        ]      
     }
 }
-
 
 SEM_DESCONTO = {
     "TEF",
@@ -188,46 +180,43 @@ SEM_DESCONTO = {
 }
 
 precos_mensais = {
-    "Smart Menu": 99.00,
-    "Terminais Autoatendimento": 199.00,
-    "Hub de Delivery": 79.00,
-    "Delivery Direto Profissional": 200.00,
-    "Delivery Direto VIP": 300.00,
-    "TEF": 99.90,
-    "Importação de XML": 29.00,
-    "Cardápio digital": 99.00,
-    "Contratos de cartões e outros": 50.00,
-    "Notas Fiscais Ilimitadas": 0.0,  # Incluído no plano, pode ser 0
-    "3000 Notas Fiscais": 0.0,
-    "60 Notas Fiscais": 00.00,
-    "120 Notas Fiscais": 00.00,
-    "250 Notas Fiscais": 00.00,
-    "Conciliação Bancária": 50.00,
-    "Facilita NFE": 99.00,
-    "Integração API": 299.00,
-    "Business Intelligence (BI)": 199.00,
-    "Backup Realtime": 199.90,
-    "Ordem de Serviço": 20.00,
-    "App Gestão CPlug": 20.00,
-    "Painel Senha Mobile": 49.00,
-    "Controle de Mesas": 49.00,
+    "Conciliação Bancária": 30.00,
+    "Contratos de cartões e outros": 49.90,
+    "Controle de Mesas": 30.00,
+    "Delivery": 30.00,
+    "Estoque em Grade": 30.00,
+    "Importação de XML": 30.00,
+    "Ordem de Serviço": 30.00,
     "Produção": 30.00,
-    "Promoções": 24.50,
-    "Marketing": 24.50,
-    "Relatório Dinâmico": 50.00,
-    "Atualização em tempo real": 49.00,
+    "Relatório Dinâmico": 59.90,
+    "Notas Fiscais Ilimitadas": 119.90,
+    "3000 Notas Fiscais": 0.0,
+
+    "60 Notas Fiscais": 40.00,
+    "120 Notas Fiscais": 70.00,
+    "250 Notas Fiscais": 90.00,
+
+    "TEF": 99.90,
     "Smart TEF": 49.90,
-    "Relatório KDS": 0.0, #verificar valor
-    "Delivery": 0.0, #verificar valor
-    "Painel Senha TV": 0.0, #verificar valor
-    "Estoque em Grade": 0.0, #verificar valor
-    "Relatórios": 0.0, #verificar valor
-    "Suporte Técnico - Via chamados": 0.0, #verificar valor
-    "Suporte Técnico - Via chat": 0.0, #verificar valor
-    "PDV - Frente de Caixa": 0.0, #verificar valor
-    "Relatório Básico": 0.0, #verificar valor
-    "Suporte Técnico - Estendido": 99.00,
-    
+    "Backup Realtime": 99.90,
+    "Atualização em Tempo Real": 49.90,
+    "Business Intelligence (BI)": 99.90,
+    "Hub de Delivery": 99.90,
+    "Facilita NFE": 49.90,
+    "Smart Menu": 99.90,
+    "Cardápio Digital": 29.90,
+    "Programa de Fidelidade": 299.90,
+    "Autoatendimento": 299.90,
+    "Delivery Direto Básico": 247.00,
+    "Delivery Direto Profissional": 347.00,
+    "Delivery Direto VIP": 497.00,
+    "Promoções": 39.90,
+    "Marketing": 49.90,
+    "Painel de Senha": 49.90,
+    "Integração TAP": 249.90,
+    "Integração API": 199.90,
+    "Relatório KDS": 29.90,
+    "App Gestão CPlug": 19.90,
     "Domínio Próprio": 19.90,
     "Gestão de Entregadores": 19.90,
     "Robô de WhatsApp + Recuperador de Pedido": 99.90,
@@ -276,7 +265,7 @@ class PlanoFrame(ttkb.Frame):
         self.validade_proposta_var = validade_proposta_var_shared
         self.nome_plano_var = tk.StringVar(value="") # ← Nome do plano
 
-        self.current_plan = "Plano PDV"
+        self.current_plan = "Personalizado"
         self.spin_pdv_var = tk.IntVar(value=1)
         self.spin_users_var = tk.IntVar(value=1)
         self.spin_auto_var = tk.IntVar(value=0)
@@ -324,7 +313,7 @@ class PlanoFrame(ttkb.Frame):
 
         self._montar_layout_esquerda()
         self._montar_layout_direita()
-        self.configurar_plano("Plano PDV")
+        self.configurar_plano("Personalizado")
 
     def fechar_aba(self):
         if self.on_close_callback:
@@ -339,7 +328,7 @@ class PlanoFrame(ttkb.Frame):
 
         frame_planos = ttkb.Labelframe(self.frame_left, text="Planos")
         frame_planos.pack(fill="x", pady=5)
-        for p in ["Plano PDV","Plano Gestão","Plano Performance","Autoatendimento","Bling", "Em Branco"]:
+        for p in ["Personalizado","Ideal","Completo","Autoatendimento","Bling", "Em Branco"]:
             ttkb.Button(frame_planos, text=p,
                         command=lambda pl=p: self.configurar_plano(pl)
                        ).pack(side="left", padx=5)
@@ -541,117 +530,27 @@ class PlanoFrame(ttkb.Frame):
         self.current_plan = plano
         self.spin_pdv_var.set(info["min_pdv"])
         self.spin_users_var.set(info["min_users"])
-        self.spin_auto_var.set(0)
-        self.spin_cardapio_var.set(0)
-        self.spin_tef_var.set(0)
-        self.spin_smart_tef_var.set(0)
-        self.spin_app_cplug_var.set(0)
-        self.spin_delivery_direto_basico_var.set(0)
-        self.var_notas.set("NONE")
-
+        if plano == "Autoatendimento":
+            self.spin_auto_var.set(1)
         for m in self.modules:
             self.modules[m].set(0)
             if m in self.check_buttons:
                 self.check_buttons[m].config(state='normal')
-        
         for obrig in info["mandatory"]:
             if obrig in self.modules:
                 self.modules[obrig].set(1)
                 if obrig in self.check_buttons:
                     self.check_buttons[obrig].config(state='disabled')
-        
-        if plano == "Plano Gestão":
-            self.modules["Notas Fiscais Ilimitadas"].set(1)
-            self.check_buttons["Notas Fiscais Ilimitadas"].config(state='disabled')
+        if plano=="Ideal":
+            self.modules["3000 Notas Fiscais"].set(1)
+            if "3000 Notas Fiscais" in self.check_buttons:
+                self.check_buttons["3000 Notas Fiscais"].config(state='disabled')
         else:
-            self.modules["Notas Fiscais Ilimitadas"].set(0)
-            self.check_buttons["Notas Fiscais Ilimitadas"].config(state='normal')
-        
-        if plano == "Plano PDV":
-            self.spin_users_var.set(2)
-            self.modules["30 Notas Fiscais"].set(1)
-            self.modules["Relatório Básico"].set(1)
-            self.modules["PDV - Frente de Caixa"].set(1)
-            self.modules["Suporte Técnico - Via chamados"].set(1)
-            self.check_buttons["30 Notas Fiscais"].config(state='disabled')
-            self.check_buttons["Relatório Básico"].config(state='disabled')
-            self.check_buttons["PDV - Frente de Caixa"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Via chamados"].config(state='disabled')
-        elif plano == "Plano Gestão":
-            self.spin_pdv_var.set(2)
-            self.spin_users_var.set(3)
-            self.modules["Notas Fiscais Ilimitadas"].set(1)
-            self.modules["Importação de XML"].set(1)
-            self.modules["Painel Senha TV"].set(1)
-            self.modules["Estoque em Grade"].set(1)
-            self.modules["Relatórios"].set(1)
-            self.modules["Suporte Técnico - Via chamados"].set(1)
-            self.modules["Suporte Técnico - Via chat"].set(1)
-            self.modules["Delivery"].set(1)
-            self.modules["Relatório KDS"].set(1)
-            self.check_buttons["Notas Fiscais Ilimitadas"].config(state='disabled')
-            self.check_buttons["Importação de XML"].config(state='disabled')
-            self.check_buttons["Painel Senha TV"].config(state='disabled')
-            self.check_buttons["Estoque em Grade"].config(state='disabled')
-            self.check_buttons["Relatórios"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Via chamados"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Via chat"].config(state='disabled')
-            self.check_buttons["Delivery"].config(state='disabled')
-            self.check_buttons["Relatório KDS"].config(state='disabled')
-        elif plano == "Plano Performance":
-            self.spin_pdv_var.set(3)
-            self.spin_users_var.set(5)
-            self.spin_smart_tef_var.set(3)
-            self.modules["Produção"].set(1)
-            self.modules["Promoções"].set(1)
-            self.modules["Notas Fiscais Ilimitadas"].set(1)
-            self.modules["Importação de XML"].set(1)
-            self.modules["Hub de Delivery"].set(1)
-            self.modules["Ordem de Serviço"].set(1)
-            self.modules["Delivery"].set(1)
-            self.modules["App Gestão CPlug"].set(1)
-            self.modules["Relatório KDS"].set(1)
-            self.modules["Painel Senha TV"].set(1)
-            self.modules["Painel Senha Mobile"].set(1)
-            self.modules["Controle de Mesas"].set(1)
-            self.modules["Estoque em Grade"].set(1)
-            self.modules["Marketing"].set(1)
-            self.modules["Relatórios"].set(1)
-            self.modules["Relatório Dinâmico"].set(1)
-            self.modules["Atualização em Tempo Real"].set(1)
-            self.modules["Facilita NFE"].set(1)
-            self.modules["Conciliação Bancária"].set(1)
-            self.modules["Contratos de cartões e outros"].set(1)
-            self.modules["Suporte Técnico - Via chamados"].set(1)
-            self.modules["Suporte Técnico - Via chat"].set(1)
-            self.modules["Suporte Técnico - Estendido"].set(1)
-            self.modules["PDV - Frente de Caixa"].set(1)
-            self.modules["Smart TEF"].set(1)
-            self.check_buttons["Produção"].config(state='disabled')
-            self.check_buttons["Promoções"].config(state='disabled')
-            self.check_buttons["Notas Fiscais Ilimitadas"].config(state='disabled')
-            self.check_buttons["Importação de XML"].config(state='disabled')
-            self.check_buttons["Hub de Delivery"].config(state='disabled')
-            self.check_buttons["Ordem de Serviço"].config(state='disabled')
-            self.check_buttons["Delivery"].config(state='disabled')
-            self.check_buttons["App Gestão CPlug"].config(state='disabled')
-            self.check_buttons["Relatório KDS"].config(state='disabled')
-            self.check_buttons["Painel Senha TV"].config(state='disabled')
-            self.check_buttons["Painel Senha Mobile"].config(state='disabled')
-            self.check_buttons["Controle de Mesas"].config(state='disabled')
-            self.check_buttons["Estoque em Grade"].config(state='disabled')
-            self.check_buttons["Marketing"].config(state='disabled')
-            self.check_buttons["Relatórios"].config(state='disabled')
-            self.check_buttons["Relatório Dinâmico"].config(state='disabled')
-            self.check_buttons["Atualização em Tempo Real"].config(state='disabled')
-            self.check_buttons["Facilita NFE"].config(state='disabled')
-            self.check_buttons["Conciliação Bancária"].config(state='disabled')
-            self.check_buttons["Contratos de cartões e outros"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Via chamados"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Via chat"].config(state='disabled')
-            self.check_buttons["Suporte Técnico - Estendido"].config(state='disabled')
-            self.check_buttons["PDV - Frente de Caixa"].config(state='disabled')
-            self.check_buttons["Smart TEF"].config(state='disabled')
+            if "3000 Notas Fiscais" in self.check_buttons:
+                self.modules["3000 Notas Fiscais"].set(0)
+                self.check_buttons["3000 Notas Fiscais"].config(state='disabled')
+        if plano!="Personalizado":
+            self.var_notas.set("NONE")
 
         self.user_override_anual_active.set(False)
         self.user_override_discount_active.set(False)
@@ -667,6 +566,7 @@ class PlanoFrame(ttkb.Frame):
         base_mensal = info["base_mensal"]
         mandatory = info["mandatory"]
 
+
         parte_descontavel = base_mensal
         parte_sem_desc = 0.0
 
@@ -676,31 +576,23 @@ class PlanoFrame(ttkb.Frame):
                 if (m not in SEM_DESCONTO) and (m not in mandatory):
                     parte_descontavel += precos_mensais.get(m, 0.0)
 
-        # Notas Fiscais
+        # Notas
         if self.modules.get("3000 Notas Fiscais", tk.IntVar()).get() == 1:
             parte_descontavel += precos_mensais.get("3000 Notas Fiscais", 0.0)
         else:
             nf_opt = self.var_notas.get()
             if nf_opt in ["60","120","250"]:
                 parte_descontavel += precos_mensais.get(nf_opt+" Notas Fiscais", 0.0)
-        
-        # PDVs e Usuários (verifique as lógicas de preço para cada plano)
+
+        # PDVs e Users
         pdv_extras = max(0, self.spin_pdv_var.get() - info["min_pdv"])
-        if self.current_plan == "Plano Gestão":
-            parte_descontavel += pdv_extras * 59.90
-        elif self.current_plan != "Bling":
-            parte_descontavel += pdv_extras * 59.90  # Ou o valor padrão
-        else:
+        if self.current_plan == "Bling":
             parte_descontavel += pdv_extras * 40.00
+        else:
+            parte_descontavel += pdv_extras * 59.90
 
         user_extras = max(0, self.spin_users_var.get() - info["min_users"])
-        if self.current_plan == "Plano PDV":
-            parte_descontavel += user_extras * 19.00
-        elif self.current_plan == "Plano Gestão":
-            user_extras = max(0, self.spin_users_var.get() - info["min_users"] - (3 if self.current_plan == "Plano Gestão" else 0))
-            parte_descontavel += user_extras * 19.00
-        else:
-            parte_descontavel += user_extras * 20.00  # Valor padrão para outros planos
+        parte_descontavel += user_extras * 20.00
 
         # Módulos sem desconto
         for m, var_m in self.modules.items():
@@ -733,39 +625,50 @@ class PlanoFrame(ttkb.Frame):
             parte_descontavel += card_qt*24.90
 
         valor_mensal_automatico = parte_descontavel + parte_sem_desc
-        valor_anual_automatico = parte_descontavel * 12 + parte_sem_desc * 12
-        
-        # Aplicar desconto (se não houver override)
-        if not self.user_override_anual_active.get() and not self.user_override_discount_active.get():
-            final_anual = valor_anual_automatico * 0.9  # 10% de desconto
-        elif self.user_override_anual_active.get():
+
+        # Cálculo Anual
+        if self.user_override_anual_active.get():
             try:
                 final_anual = float(self.valor_anual_editavel.get())
             except ValueError:
-                final_anual = valor_anual_automatico
+                final_anual = valor_mensal_automatico
+                self.valor_anual_editavel.set(f"{final_anual:.2f}")
         elif self.user_override_discount_active.get():
             try:
-                desconto_percent = float(self.desconto_personalizado.get())
-                final_anual = valor_anual_automatico * (1 - desconto_percent / 100)
+                desc_custom = float(self.desconto_personalizado.get())
             except ValueError:
-                final_anual = valor_anual_automatico
-        
-        # Calcular custo de treinamento (se aplicável)
-        if valor_mensal_automatico < 549.90:
-            training_cost = 549.90 - valor_mensal_automatico
+                desc_custom = 0.0
+            desc_dec = desc_custom / 100.0
+            final_anual = (parte_descontavel*(1-desc_dec)) + parte_sem_desc
+            self.valor_anual_editavel.set(f"{final_anual:.2f}")
         else:
+            desc_padrao = 0.10
+            final_anual = (parte_descontavel*(1-desc_padrao)) + parte_sem_desc
+            self.valor_anual_editavel.set(f"{final_anual:.2f}")
+
+        # Custo treinamento
+        if self.current_plan == "Autoatendimento":
             training_cost = 0.0
 
-        # Atualizar labels na interface
+        elif self.current_plan == "Em Branco":
+            training_cost = 0.0    
+        else:
+            if valor_mensal_automatico < 549.90:
+                training_cost = 549.90 - valor_mensal_automatico
+            else:
+                training_cost = 0.0
+
+        # Atualização das labels
         if self.spin_auto_var.get() > 0 or self.current_plan == "Autoatendimento":
             self.lbl_plano_mensal.config(text="Plano (Mensal): Não disponível")
         else:
             self.lbl_plano_mensal.config(text=f"Plano (Mensal): R$ {valor_mensal_automatico:.2f}")
+
         self.lbl_plano_anual.config(text=f"Plano (Anual): R$ {final_anual:.2f}")
         self.lbl_treinamento.config(text=f"Custo Treinamento (Mensal): R$ {training_cost:.2f}")
 
-        if valor_mensal_automatico > 0:
-            desconto_calc = ((valor_mensal_automatico - final_anual) / valor_mensal_automatico) * 100
+        if valor_mensal_automatico>0:
+            desconto_calc = ((valor_mensal_automatico - final_anual)/valor_mensal_automatico)*100
         else:
             desconto_calc = 0.0
         self.lbl_desconto.config(text=f"Desconto: {round(desconto_calc)}%")
@@ -783,7 +686,7 @@ class PlanoFrame(ttkb.Frame):
         if pdv_val > 0:
             inc.append(f"{pdv_val} PDVs")
             # Adiciona "Usuário Cortesia" para PDVs extras em planos específicos
-            if self.current_plan in ["Plano PDV", "Plano Gestão", "Plano Performance"]:
+            if self.current_plan in ["Personalizado", "Ideal", "Completo"]:
                 min_pdv = PLAN_INFO[self.current_plan]["min_pdv"]
                 pdv_extras = max(0, pdv_val - min_pdv)
                 if pdv_extras > 0:
