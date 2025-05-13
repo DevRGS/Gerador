@@ -403,6 +403,7 @@ precos_mensais = {
     
 
     "Painel de Senha Mobile": 49.00,
+    "Painel de Senhta TV": 00.00,
     "Suporte Técnico - Estendido": 99.00,
     "Suporte Técnico - Via Chat": 00.00
     
