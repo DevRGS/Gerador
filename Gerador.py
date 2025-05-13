@@ -150,13 +150,13 @@ PLAN_INFO = {
             "Importação de XML",
             "Painel de Senha TV",
             "Estoque em Grade",
-            "Relatório Básico",
+            "Relatórios",
             "Suporte Técnico - Via Chamados",
             "Suporte Técnico - Via Chat",
-            "Delivery",
-            "Relatório KDS"
+            "Delivery"
         ],
         "allowed_optionals": [
+            "Relatório KDS",
             "Integração API", # Permitido para o Plano Gestão
             "Suporte Técnico - Estendido", 
             "Conciliação Bancária", 
