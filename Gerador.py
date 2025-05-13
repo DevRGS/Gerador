@@ -148,7 +148,6 @@ PLAN_INFO = {
         "mandatory": [
             "Notas Fiscais Ilimitadas",
             "Importação de XML",
-            "Painel de Senha TV",
             "Estoque em Grade",
             "Relatórios",
             "Suporte Técnico - Via Chamados",
