@@ -149,7 +149,7 @@ PLAN_INFO = {
             "Notas Fiscais Ilimitadas",
             "Importação de XML",
             "Estoque em Grade",
-            "Relatórios",
+            "Relatório básico",
             "Suporte Técnico - Via Chamados",
             "Suporte Técnico - Via Chat",
             "Delivery"
