@@ -177,6 +177,7 @@ PLAN_INFO = {
             "Promoções", 
             "Marketing", 
             "Painel de Senha Mobile", 
+            "Painel de Senha TV",
             "Domínio Próprio",
             "Entrega Fácil iFood", #ajustar preço
             "Gestão de Redes Sociais", 
