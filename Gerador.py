@@ -174,6 +174,7 @@ PLAN_INFO = {
             "Delivery Direto Básico", 
             "Delivery Direto Profissional", 
             "Delivery Direto VIP",
+            "Robô de WhatsApp + Recuperador de Pedido",
             "Promoções", 
             "Marketing", 
             "Painel de Senha Mobile", 
@@ -558,6 +559,7 @@ class PlanoFrame(ttkb.Frame):
             "API DD": tk.IntVar(),  # API Delivery Direto, não confundir com Integração API
             "Delivery Direto Profissional": tk.IntVar(),
             "Delivery Direto VIP": tk.IntVar(),
+            "Robô de WhatsApp + Recuperador de Pedido":tk.IntVar(),
             "Promoções": tk.IntVar(),
             "Marketing": tk.IntVar(),
             "Painel de Senha TV": tk.IntVar(),
