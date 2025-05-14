@@ -341,6 +341,7 @@ PLAN_INFO = {
 
 
 
+
 SEM_DESCONTO = {
     "TEF",
     "Autoatendimento",
