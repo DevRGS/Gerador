@@ -401,6 +401,7 @@ precos_mensais = {
     # Novos itens adicionados da lista fornecida
     "Entrega Fácil iFood": 49.90,
     "E-mail Profissional": 19.90,
+    "Robô de WhatsApp + Recuperador de Pedido": 99.90,
     
 
     "Painel de Senha Mobile": 49.00,
