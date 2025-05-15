@@ -314,6 +314,7 @@ PLAN_INFO = {
         ],
         "module_limits": {}
     },
+    
     "Bling": { # Exemplo, ajuste conforme necessário
         "base_mensal": 229.90,
         "base_anual": 179.90,
