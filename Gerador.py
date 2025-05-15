@@ -325,7 +325,7 @@ PLAN_INFO = {
         "pdv_extra_cost": 50.00,
         "mandatory": [
             "Suporte Técnico - Via Chamados",
-            "Suporte Técnico - Via Chat"
+            "Suporte Técnico - Via Chat",
             "Relatório Básico",
             "Notas Fiscais Ilimitadas",
             ], # Exemplo
