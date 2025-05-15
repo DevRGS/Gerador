@@ -154,6 +154,7 @@ PLAN_INFO = {
             "Suporte Técnico - Via Chat",
             "Delivery"
         ],
+        
         "allowed_optionals": [
             "Relatório KDS",
             "Integração API", # Permitido para o Plano Gestão
@@ -314,7 +315,7 @@ PLAN_INFO = {
         ],
         "module_limits": {}
     },
-    
+
     "Bling": { # Exemplo, ajuste conforme necessário
         "base_mensal": 229.90,
         "base_anual": 179.90,
