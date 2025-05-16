@@ -143,7 +143,7 @@ PLAN_INFO = {
         "max_additional_users": 2,
         "user_extra_cost": 19.00,
         "base_pdv": 2,
-        "max_additional_pdv": 1,
+        "max_additional_pdv": 3,
         "pdv_extra_cost": 59.90,
         "mandatory": [
             "Notas Fiscais Ilimitadas",
@@ -154,7 +154,7 @@ PLAN_INFO = {
             "Suporte Técnico - Via Chat",
             "Delivery"
         ],
-        
+
         "allowed_optionals": [
             "Relatório KDS",
             "Integração API", # Permitido para o Plano Gestão
